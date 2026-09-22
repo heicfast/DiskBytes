@@ -346,11 +346,7 @@
   font: 9.5px/1.4 var(--font-mono);
   color: var(--text-tertiary);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  unicode-bidi: plaintext;
 }
 .db-big-row > b {
   font-size: 12px;

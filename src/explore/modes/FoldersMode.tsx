@@ -7,9 +7,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { LockKeyholeIcon, categoryIcon } from "../../components/Icon";
+import { CheckIcon, LockKeyholeIcon, categoryIcon } from "../../components/Icon";
 import { getFolderView, type FolderViewData } from "../../viz/exploreIpc";
 import { bytes, relativeAge } from "../../lib/format";
+import { useCleanupStore } from "../../state/cleanup";
 
 const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
 
@@ -29,6 +30,11 @@ export function FoldersMode(props: FoldersModeProps) {
   const [data, setData] = useState<FolderViewData | null>(null);
   const [stale, setStale] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Live staged-set mirror: cards flip to the staged badge the instant
+  // an item joins/leaves the cleanup queue (spec §9 — the queue is the
+  // single source of truth; components subscribe via selectors).
+  const queueItems = useCleanupStore((s) => s.items);
+  const staged = useMemo(() => new Set(queueItems.map((i) => i.id)), [queueItems]);
 
   const key = `${props.generation}:${props.folder}:${props.filter}`;
 
@@ -129,6 +135,7 @@ export function FoldersMode(props: FoldersModeProps) {
                       className={`db-folder-card tone-${TONES[(vi.index * cols + i) % TONES.length]} ${
                         props.selectedId === f.id ? "is-selected" : ""
                       } ${f.protected ? "is-protected" : ""}`}
+                      style={{ ["--i" as string]: vi.index * cols + i }}
                       onClick={() => props.onSelect(f.id)}
                       onDoubleClick={() => props.onOpen(f.id)}
                       onContextMenu={(e) => {
@@ -141,6 +148,11 @@ export function FoldersMode(props: FoldersModeProps) {
                       {f.protected && (
                         <span className="db-folder-protected-badge" title="Windows manages this item">
                           <LockKeyholeIcon size={13} />
+                        </span>
+                      )}
+                      {staged.has(f.id) && (
+                        <span className="db-folder-staged-badge" title="Staged for cleanup">
+                          <CheckIcon size={12} /> Staged
                         </span>
                       )}
                       <span className="db-folder-tab" />

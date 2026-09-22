@@ -65,6 +65,28 @@ pub fn get_home_path(platform: State<'_, Arc<HostPlatform>>) -> Result<String, S
         .ok_or_else(|| "Couldn't resolve your user profile folder.".into())
 }
 
+/// Resolve a display path to a node id in the CURRENT tree, so the Home
+/// button can NAVIGATE when the path is inside the last scan (no
+/// rescan) and only start a new scan when it isn't. Returns `None`
+/// (not an error) when there is no tree, the generation is stale, or
+/// the path is outside the scan — the caller decides what to do.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // State extraction is the tauri command contract
+pub fn resolve_path(
+    generation: u64,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<Option<u32>, String> {
+    let guard = state.tree.read();
+    let Some(tree) = guard.as_ref() else {
+        return Ok(None);
+    };
+    if tree.generation != generation {
+        return Ok(None);
+    }
+    Ok(tree.resolve_display_path(&path))
+}
+
 /// The disk storage snapshot (spec §6.5) for the volume containing the
 /// current scan root (system drive when there is no scan).
 #[derive(Debug, Clone, Serialize)]

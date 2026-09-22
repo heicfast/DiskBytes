@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { Clock3Icon, CameraIcon, Trash2Icon } from "../components/Icon";
+import { TailPath } from "../components/TailPath";
 import { EmptyState } from "../components/buttons";
 import { invoke } from "../lib/ipc";
 import { bytes } from "../lib/format";
@@ -201,7 +202,7 @@ export function SnapshotsView() {
             const pct = Math.max(2, (Math.abs(c.delta) / maxAbs) * 100);
             return (
               <div className="db-diff-row" key={c.path} title={c.path}>
-                <span>{c.path}</span>
+                <span className="db-diff-path"><TailPath path={c.path} /></span>
                 <em className="tnum">{bytes(c.before)}</em>
                 {c.delta > 0 ? (
                   <b className="grew tnum">+{bytes(c.delta)}</b>

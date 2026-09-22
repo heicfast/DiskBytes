@@ -22,6 +22,7 @@ export const EVENTS = {
   depthSliderMoved: "depth_slider_moved",
   scanStarted: "scan_started",
   scanCompleted: "scan_completed",
+  scanCancelled: "scan_cancelled",
   quickWinsCategoryOpened: "quick_wins_category_opened",
   quickWinsAddAll: "quick_wins_add_all",
   cleanupStaged: "cleanup_staged",

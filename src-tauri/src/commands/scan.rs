@@ -274,6 +274,37 @@ pub fn get_status(state: State<'_, AppState>) -> StatusResponse {
     }
 }
 
+/// Cancel the running scan (user action — spec §4 "starting a new scan
+/// cancels the old"; this exposes the SAME cooperative mechanism to the
+/// Stop button). The worker thread exits at its next checkpoint
+/// without swapping its tree, so the previous tree (if any) stays
+/// visible. Returns whether a scan was actually running.
+///
+/// The `scanning` flag flips immediately so the 150 ms progress ticker
+/// stops at once; the frontend reverts to its saved tree-generation
+/// optimistically and reconciles through `get_status` (a scan that
+/// completed in the cancel window still emits its `scan-done`).
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // State extraction is the tauri command contract
+pub fn cancel_scan(state: State<'_, AppState>) -> Result<bool, String> {
+    let running = {
+        let scan = state.scan.lock();
+        match scan.as_ref() {
+            Some(handle) => {
+                handle.cancel.store(true, Ordering::SeqCst);
+                true
+            }
+            None => false,
+        }
+    };
+    if running {
+        // Stop the ticker now; the worker's own exit path also stores
+        // false (idempotent).
+        state.scanning.store(false, Ordering::SeqCst);
+    }
+    Ok(running)
+}
+
 /// Swap the finished tree in, dropping the old `Arc<Tree>` on a
 /// background thread (spec §4 — never stall the UI on a million-node
 /// drop).

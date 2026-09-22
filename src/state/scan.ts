@@ -51,6 +51,10 @@ interface ScanStore {
   startScan: (target: string) => Promise<void>;
   /** Turbo (MFT) scan; ELEVATION_REQUIRED → shield state. */
   startScanTurbo: (target: string) => Promise<void>;
+  /** Stop the running scan (cooperative server-side). Reverts to the
+   * previous finished tree when one exists (generation restored so
+   * every cache stays valid), otherwise back to the idle welcome. */
+  cancelScan: () => Promise<void>;
   /** The turbo fallback reason (shown until the standard scan lands). */
   turboFallback: string | null;
   /** The turbo report (records/ms/warnings). */
@@ -85,6 +89,20 @@ interface CommitEvent {
 let listenersAttached = false;
 let unlisteners: UnlistenFn[] = [];
 let scanStartedAt: number | null = null;
+/** The generation of the last FINISHED tree the UI holds (0 before the
+ * first scan). `generation` tracks the scan lifecycle; this tracks the
+ * tree so a cancelled scan can revert every fetch key cleanly. */
+let treeGeneration = 0;
+let treeStats: RootStats | null = null;
+
+/** Record the tree the store now points at (every path that sets
+ * status "done" or refreshes the tree via surgery). */
+function recordTree(stats: [number, number, number, number] | null): void {
+  treeGeneration = useScanStore.getState().generation;
+  treeStats = stats
+    ? { logical: stats[0], onDisk: stats[1], files: stats[2], folders: stats[3] }
+    : null;
+}
 
 /** The lost-event reconcile: a tiny tree can finish scanning before the
  *  `start_scan` invoke resolves, so the `scan-done` event lands while
@@ -113,6 +131,7 @@ async function reconcileDone(generation: number): Promise<void> {
           ? { logical: rec.stats[0], onDisk: rec.stats[1], files: rec.stats[2], folders: rec.stats[3] }
           : null,
       });
+      recordTree(rec.stats);
     }
   } catch {
     /* get_status unavailable: the event stream still works */
@@ -179,6 +198,7 @@ function ensureWatchdog(): void {
                 ? { logical: rec.stats[0], onDisk: rec.stats[1], files: rec.stats[2], folders: rec.stats[3] }
                 : null,
             });
+            recordTree(rec.stats);
           }
         }
       } catch {
@@ -240,6 +260,33 @@ export const useScanStore = create<ScanStore>((set, get) => ({
     }
   },
 
+  cancelScan: async () => {
+    const s = get();
+    if (s.status !== "scanning") return;
+    // Optimistic revert FIRST (the UI snaps back instantly), then the
+    // server ack. The reverted generation matches the standing tree so
+    // every generation-keyed fetch and cache stays valid.
+    if (treeGeneration > 0) {
+      set({
+        status: "done",
+        generation: treeGeneration,
+        stats: treeStats,
+        progress: null,
+        scanDurationMs: null,
+        error: null,
+      });
+    } else {
+      set({ status: "idle", progress: null, error: null });
+    }
+    stopWatchdog();
+    track(EVENTS.scanCancelled, {});
+    try {
+      await invoke("cancel_scan");
+    } catch {
+      /* the watchdog/reconcile heals any drift */
+    }
+  },
+
   applyTreeUpdate: (generation, stats) => {
     set((s) => ({
       generation,
@@ -249,6 +296,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
         ? { logical: stats[0], onDisk: stats[1], files: stats[2], folders: stats[3] }
         : s.stats,
     }));
+    recordTree(stats);
   },
 
   ensureListeners: () => {
@@ -290,6 +338,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
               ? { logical: stats[0], onDisk: stats[1], files: stats[2], folders: stats[3] }
               : null,
           });
+          recordTree(stats);
           track(EVENTS.scanCompleted, {
             engine: "standard",
             files: stats ? stats[2] : 0,

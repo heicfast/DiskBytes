@@ -22,7 +22,8 @@
         "transparent": false,
         "backgroundColor": "#F5F5F7",
         "center": true,
-        "titleBarStyle": "Overlay"
+        "titleBarStyle": "Overlay",
+        "windowsAdditionalBrowserArgs": "--enable-features=OverlayScrollbar,FluentOverlayScrollbar"
       }
     ],
     "security": {

@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckIcon, Trash2Icon, XIcon } from "./Icon";
+import { TailPath } from "./TailPath";
 import { useCleanupStore } from "../state/cleanup";
 import { useLicenseStore } from "../state/license";
 import { bytes } from "../lib/format";
@@ -95,6 +96,9 @@ export function CleanupQueuePopover({
           style={anchor === "topbar" ? { right: 18, top: 96 } : undefined}
           role="dialog"
           aria-label="Cleanup Queue"
+          initial={{ opacity: 0, y: -8, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 520, damping: 34 }}
         >
           <div className="db-pop-head">
             <div>
@@ -157,7 +161,7 @@ export function CleanupQueuePopover({
                 <div key={`${i.id}:${i.path}`} className="db-pop-row">
                   <Trash2Icon size={14} />
                   <div className="db-pop-item">
-                    <strong title={i.path}>{i.path}</strong>
+                    <TailPath path={i.path} className="db-pop-path" />
                     <small>{i.reason}</small>
                   </div>
                   <b className="tnum">{bytes(i.size)}</b>

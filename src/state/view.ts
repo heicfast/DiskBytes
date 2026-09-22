@@ -24,7 +24,11 @@ export interface ViewStore {
 
 export const useViewStore = create<ViewStore>((set) => ({
   tab: "explore",
-  inspectorVisible: false,
+  // Open by default (product-owner decision): the inspector is part of
+  // the app's identity, and its welcome state teaches what it does.
+  // Was hidden-until-first-scan in round 12; users read the closed
+  // panel as "broken / missing".
+  inspectorVisible: true,
   inspectorTouched: false,
   nameFilter: "",
   setTab: (tab) => set({ tab }),

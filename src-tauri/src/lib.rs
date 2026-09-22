@@ -67,6 +67,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::scan::start_scan,
+            commands::scan::cancel_scan,
             commands::scan::get_status,
             commands::scan::get_dev_hooks,
             commands::scan::start_scan_turbo,
@@ -88,6 +89,7 @@ pub fn run() {
             commands::cleanup::open_recycle_bin,
             commands::sidebar::get_drive_chips,
             commands::sidebar::get_home_path,
+            commands::sidebar::resolve_path,
             commands::sidebar::disk_storage,
             commands::sidebar::is_elevated,
             commands::sidebar::restart_as_admin,

@@ -88,7 +88,7 @@
   flex: none;
   display: flex;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-l);
   padding: 3px;
   background: var(--card);
@@ -105,8 +105,8 @@
   border: 0;
   border-radius: var(--radius-m);
   background: transparent;
-  color: var(--text-tertiary);
-  transition: color var(--fade) ease;
+  color: var(--text-secondary);
+  transition: color var(--fade) ease, background var(--fade) ease;
 }
 .db-mode-picker button:hover {
   color: var(--text);
@@ -138,7 +138,7 @@
   flex: none;
   display: flex;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-m);
   padding: 3px;
   background: var(--card);
@@ -150,10 +150,10 @@
   border-radius: var(--radius-s);
   background: transparent;
   padding: 0 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 570;
-  transition: color var(--fade) ease;
+  transition: color var(--fade) ease, background var(--fade) ease;
   white-space: nowrap;
 }
 .db-segmented button:hover {
@@ -204,12 +204,12 @@
   flex: none;
   width: 27px;
   height: 27px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-s);
-  background: var(--chip);
+  background: var(--card);
   font-weight: 800;
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   transition: all var(--fade) ease;
 }
 .db-abbreviate:hover {
@@ -230,8 +230,44 @@
   position: relative;
   background: var(--background);
 }
-.db-visual-stage.db-scroll {
-  scrollbar-gutter: stable;
+/* The keyed swap wrapper (ExploreView): a real flex box so every mode's
+ * root still stretches the full stage; only opacity/transform animate. */
+.db-stage-swap {
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Folder-card entrance: a capped stagger (first ~12 cards) with
+ * `backwards` fill so the natural hover transform wins afterwards. */
+@keyframes db-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.db-folder-card {
+  animation: db-card-in 210ms cubic-bezier(0.2, 0.7, 0.25, 1) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 22ms);
+}
+/* File tiles: flat quick fade (no stagger — the grid is long). */
+@keyframes db-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.db-file-row {
+  animation: db-row-in 170ms ease backwards;
 }
 
 /* ── Scanning state ─────────────────────────────────────────────────── */
@@ -269,8 +305,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Tail-ellipsis: RTL block start-edge = right, so a long LTR path
+   * clips at the LEFT and shows the segment being scanned. (No
+   * `unicode-bidi: plaintext` — that re-derives LTR and defeats it,
+   * the same bug the inspector path box had.) */
   direction: rtl;
-  text-align: center;
 }
 .db-state .db-state-actions {
   display: flex;
@@ -281,6 +320,94 @@
   color: var(--text-secondary);
   max-width: 380px;
   line-height: 1.55;
+}
+
+/* ── Premium scanning visual — radial disk sweep ──────────────────────
+ * Transform/opacity-only animations (compositor-driven, 60 fps): a
+ * slow conic sweep orbiting a disk core over faint concentric data
+ * rings. Replaces the old plain spinner + pulsing counter. */
+.db-scan-visual {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  flex: none;
+}
+.db-scan-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--divider);
+  opacity: 0.9;
+}
+.db-scan-ring.r1 {
+  inset: 0;
+}
+.db-scan-ring.r2 {
+  inset: 18px;
+  opacity: 0.6;
+}
+.db-scan-ring.r3 {
+  inset: 36px;
+  opacity: 0.35;
+}
+.db-scan-sweep {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 240deg,
+    var(--ink-soft) 310deg,
+    var(--ink) 352deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 12px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 12px));
+  animation: db-sweep-orbit 1.9s linear infinite;
+  will-change: transform;
+}
+@keyframes db-sweep-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.db-scan-core {
+  position: absolute;
+  inset: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--divider);
+  color: var(--ink);
+  box-shadow: var(--shadow-1), 0 0 0 6px var(--background);
+}
+/* The pulse glow is a PRE-PAINTED layer whose opacity animates —
+ * compositor-only, no per-frame box-shadow repaints. */
+.db-scan-core::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--ink-soft) 0%, transparent 70%);
+  opacity: 0;
+  animation: db-scan-core-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes db-scan-core-pulse {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.db-cancel-scan {
+  width: auto;
+  padding: 0 16px;
+  min-height: 32px;
+  font-size: 11.5px;
 }
 
 /* Idle state */
@@ -451,6 +578,45 @@
   right: 14px;
   z-index: 2;
   color: var(--on-pastel-secondary);
+}
+
+/* Staged-for-cleanup badge: an ink pill that pops in with a spring
+ * the moment the item joins the queue (instant state feedback). */
+@keyframes db-badge-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.db-folder-staged-badge {
+  position: absolute;
+  top: 23px;
+  right: 14px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 21px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background: var(--ink-grad);
+  color: var(--on-ink);
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  box-shadow: var(--ink-glow);
+  animation: db-badge-pop 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.db-folder-protected-badge + .db-folder-staged-badge {
+  /* Both badges present: keep them apart. */
+  right: 66px;
 }
 
 /* Files grid */

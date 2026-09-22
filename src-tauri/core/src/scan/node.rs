@@ -414,6 +414,56 @@ impl Tree {
         }
     }
 
+    /// Resolve a display path (e.g. the user's home folder) to a node id
+    /// in THIS tree, so navigation-first actions (the sidebar Home
+    /// button) can jump without rescanning. Matches the longest
+    /// root-path prefix, then walks children by name — ASCII-case-
+    /// insensitively (NTFS semantics); non-ASCII compares exactly.
+    /// Returns `None` when the path is outside the scanned tree or a
+    /// segment is missing. Runs once per navigation action, so the
+    /// linear child scans (UTF-16, no allocation) are fine.
+    #[must_use]
+    pub fn resolve_display_path(&self, path: &str) -> Option<u32> {
+        let incoming: Vec<&str> = path.split(['\\', '/']).filter(|s| !s.is_empty()).collect();
+        if incoming.is_empty() {
+            return None;
+        }
+        // Longest root whose path segments prefix `incoming`.
+        let mut best: Option<(usize, u32)> = None;
+        for r in &self.roots {
+            let root_segs: Vec<&str> = r
+                .path
+                .split(['\\', '/'])
+                .filter(|s| !s.is_empty())
+                .collect();
+            if root_segs.is_empty() || root_segs.len() > incoming.len() {
+                continue;
+            }
+            if root_segs
+                .iter()
+                .zip(&incoming)
+                .all(|(a, b)| a.eq_ignore_ascii_case(b))
+                && best.map_or(true, |(l, _)| root_segs.len() > l)
+            {
+                best = Some((root_segs.len(), r.node));
+            }
+        }
+        let (matched, mut cur) = best?;
+        for seg in &incoming[matched..] {
+            let needle: Vec<u16> = seg.encode_utf16().collect();
+            let next = self.children_sorted(cur).iter().copied().find(|&c| {
+                let name = self.name_u16(c);
+                needle.len() == name.len()
+                    && needle
+                        .iter()
+                        .zip(name.iter())
+                        .all(|(&a, &b)| eq_code_unit_ci(a, b))
+            });
+            cur = next?;
+        }
+        Some(cur)
+    }
+
     /// Rebuild a node's display path on demand (spec §4: walk up to the
     /// nearest node carrying a root path; append the names below it).
     ///
@@ -602,6 +652,15 @@ impl Tree {
     }
 }
 
+/// ASCII-case-insensitive UTF-16 code-unit equality (NTFS path
+/// semantics; non-ASCII code units compare exactly).
+fn eq_code_unit_ci(a: u16, b: u16) -> bool {
+    match (u8::try_from(a), u8::try_from(b)) {
+        (Ok(a), Ok(b)) => a.eq_ignore_ascii_case(&b),
+        _ => a == b, // any non-ASCII unit: exact equality
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -752,6 +811,26 @@ mod tests {
         assert_eq!(t.cluster_overhead(1), 0);
         assert_eq!(t.compression_savings(2), 0);
         assert_eq!(t.cluster_overhead(2), 28);
+    }
+
+    #[test]
+    fn resolve_display_path_walks_tree() {
+        // C:\ → Users(1) → dev(3) → notes.txt(5); ids follow the
+        // batch-append protocol (contiguous, parent < children).
+        let mut t = Tree::new(9);
+        t.add_root_path(0, "C:\\");
+        t.append_batch(0, vec![dir("Users", 1), dir("Windows", 1)]);
+        t.append_batch(1, vec![dir("dev", 1), dir("public", 1)]);
+        t.append_batch(3, vec![file("notes.txt", 10, 10, 1)]);
+        crate::scan::rollup::finalize(&mut t);
+
+        assert_eq!(t.resolve_display_path("C:\\"), Some(0));
+        assert_eq!(t.resolve_display_path("c:\\users"), Some(1)); // ASCII case-insensitive
+        assert_eq!(t.resolve_display_path("C:\\Users\\dev"), Some(3));
+        assert_eq!(t.resolve_display_path("C:/Users/dev"), Some(3)); // POSIX separators
+        assert_eq!(t.resolve_display_path("C:\\Users\\dev\\notes.txt"), Some(5));
+        assert_eq!(t.resolve_display_path("C:\\Nope"), None);
+        assert_eq!(t.resolve_display_path("E:\\"), None); // unscanned drive
     }
 
     #[cfg(windows)]

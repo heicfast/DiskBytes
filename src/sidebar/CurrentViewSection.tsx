@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { CopyIcon, EyeIcon } from "../components/Icon";
 import { OutlineButton, SectionCaption } from "../components/buttons";
+import { TailPath } from "../components/TailPath";
 import { invoke } from "../lib/ipc";
 import { bytes, duration } from "../lib/format";
 import { REVEAL_NAME } from "../lib/platform";
@@ -81,9 +82,11 @@ export function CurrentViewSection() {
       {view && (
         <div className="db-current">
           <strong>{view.name}</strong>
-          <span className="db-current-path" title={view.path}>
-            {view.path || "—"}
-          </span>
+          {view.path ? (
+            <TailPath path={view.path} className="db-current-path" />
+          ) : (
+            <span className="db-current-path">—</span>
+          )}
           <div className="db-sidebar-actions" style={{ marginTop: 9 }}>
             <OutlineButton onClick={reveal} title={REVEAL_NAME}>
               <EyeIcon size={14} /> Reveal

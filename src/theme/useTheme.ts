@@ -44,12 +44,26 @@ export function useTheme(): { theme: Theme; isDark: boolean; toggle: () => void 
       track(EVENTS.themeChanged, { theme: "pending" }),
     );
     const next: Theme = theme === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // localStorage can throw in hardened WebView profiles; the theme
-      // still applies for this session, it just will not persist.
+    const apply = () => {
+      document.documentElement.setAttribute("data-theme", next);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, next);
+      } catch {
+        // localStorage can throw in hardened WebView profiles; the theme
+        // still applies for this session, it just will not persist.
+      }
+    };
+    // Premium crossfade between palettes (View Transitions API —
+    // Chromium 111+/WebView2 + Safari 18+; graceful instant fallback
+    // elsewhere and under prefers-reduced-motion).
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void) => unknown;
+    };
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (typeof doc.startViewTransition === "function" && !reduced) {
+      doc.startViewTransition(apply);
+    } else {
+      apply();
     }
     // Native side: match window chrome (menus, tooltips). Fire-and-forget —
     // analytics never blocks and neither does this (doc 07 offline rule).

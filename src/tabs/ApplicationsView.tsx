@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { AppWindowIcon, CheckIcon, PackageOpenIcon, RefreshCwIcon, Trash2Icon, ShieldIcon } from "../components/Icon";
+import { TailPath } from "../components/TailPath";
 import { EmptyState } from "../components/buttons";
 import { bytes, relativeAge } from "../lib/format";
 import { invoke } from "../lib/ipc";
@@ -172,14 +173,14 @@ export function ApplicationsView() {
                 {app.installLocation && (
                   <div className="db-app-detail-row">
                     <span>Program files</span>
-                    <div>{app.installLocation}</div>
+                    <div><TailPath path={app.installLocation} /></div>
                     <b className="tnum">{bytes(app.bundleSize)}</b>
                   </div>
                 )}
                 {app.packageFullName && (
                   <div className="db-app-detail-row">
                     <span>Store package</span>
-                    <div>{app.packageFullName}</div>
+                    <div><TailPath path={app.packageFullName} /></div>
                     <b className="tnum">{bytes(app.bundleSize)}</b>
                   </div>
                 )}

@@ -250,6 +250,43 @@ const commands: Record<string, Cmd> = {
   }),
   start_scan: (a) => startScan(String(a.target), false),
   start_scan_turbo: (a) => startScan(String(a.target), true),
+  cancel_scan: () => {
+    // Mirrors the Rust cooperative cancel: stop the ticker, flip the
+    // flag. The store reverts client-side (tree stays as-is).
+    if (scanTicker !== null) {
+      window.clearInterval(scanTicker);
+      scanTicker = null;
+    }
+    scanning = false;
+    return true;
+  },
+  resolve_path: (a: Record<string, unknown>) => {
+    // Mirrors the Rust resolve_path: None (null) when the generation is
+    // stale or the path is outside the scanned tree. The mock tree has
+    // a This-PC synthetic root above the drive ("Local Disk (C:)"),
+    // which pathOf() skips — resolve must skip it the same way.
+    if (Number(a.generation) !== tree.generation) return null;
+    const target = String(a.path).replace(/[\/]+$/, "").replace(/\//g, "\\");
+    const root = "C:\\";
+    const lower = target.toLowerCase();
+    if (lower !== root && !lower.startsWith(root.toLowerCase())) return null;
+    // The drive node: the root child whose pathOf() is exactly "C:\".
+    const drive = tree.nodes[0].children.find((c) => fmtPath(c) === root);
+    if (drive === undefined) return null;
+    if (lower === root) return drive;
+    const segs = target
+      .slice(root.length)
+      .split("\\")
+      .filter((s) => s.length > 0);
+    let cur = drive;
+    for (const seg of segs) {
+      const kids = tree.nodes[cur].children;
+      const hit = kids.find((k) => tree.nodes[k].name.toLowerCase() === seg.toLowerCase());
+      if (hit === undefined) return null;
+      cur = hit;
+    }
+    return cur;
+  },
   get_drive_chips: () => [{ letter: "C:", target: "C:\\" }, { letter: "D:", target: "D:\\" }],
   get_home_path: () => "C:\\Users\\dev",
   disk_storage: () => ({ label: "Local Disk", total: 512 * GB, used: 450.6 * GB, free: 61.4 * GB, usedPct: 0.880 }),

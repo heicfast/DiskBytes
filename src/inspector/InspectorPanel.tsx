@@ -6,7 +6,7 @@
  * (Reveal / Preview / Focus / Copy Path), and the Add-to-Cleanup
  * toggle (disabled + tooltip for protected items).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   CopyIcon, EyeIcon, FolderIcon, LockKeyholeIcon, SearchIcon, SparklesIcon, Trash2Icon, CheckIcon, CloudIcon,
 } from "../components/Icon";
@@ -14,11 +14,58 @@ import { categoryIcon } from "../components/Icon";
 import { getNodeDetails, type NodeDetailsData } from "../viz/exploreIpc";
 import { invoke } from "../lib/ipc";
 import { bytes, relativeAge } from "../lib/format";
+import { fitPath } from "../lib/fitPath";
 import { useExploreStore } from "../state/explore";
 import { useScanStore } from "../state/scan";
 import { useCleanupStore } from "../state/cleanup";
 
 const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
+
+/** Path box font (mono, mirrors the CSS .db-path rule). */
+const PATH_FONT = "10px 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace";
+
+/** Middle-ellipsis a path to the measured box width (refits on
+ * resize). Must be called unconditionally (hooks rule); `path` may be
+ * undefined while details load. */
+function useFittedPath(
+  path: string | undefined,
+  ref: React.RefObject<HTMLParagraphElement | null>,
+): string | undefined {
+  const [out, setOut] = useState<string | undefined>(path);
+  const lastW = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!path) {
+      lastW.current = 0;
+      setOut(undefined);
+      return;
+    }
+    // 2×10px padding + 1px border inside the measured content box.
+    const budget = (w: number) => Math.max(40, w - 22);
+    const el = ref.current;
+    const w = el?.clientWidth ?? 0;
+    if (w > 0) {
+      lastW.current = w;
+      setOut(fitPath(path, budget(w), PATH_FONT));
+    } else if (lastW.current > 0) {
+      setOut(fitPath(path, budget(lastW.current), PATH_FONT));
+    } else {
+      setOut(fitPath(path, 288, PATH_FONT)); // pre-measure fallback (~300px box)
+    }
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const cw = entries[0]?.contentRect.width ?? 0;
+      if (cw > 0 && Math.abs(cw - lastW.current) > 0.5) {
+        lastW.current = cw;
+        setOut(fitPath(path!, budget(cw), PATH_FONT));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [path, ref]);
+
+  return out ?? path;
+}
 
 export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void }) {
   const generation = useScanStore((s) => s.generation);
@@ -32,6 +79,8 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
   const [details, setDetails] = useState<NodeDetailsData | null>(null);
 
   const target = selectedNode ?? currentFolder;
+  const pathRef = useRef<HTMLParagraphElement | null>(null);
+  const fittedPath = useFittedPath(details?.path, pathRef);
 
   useEffect(() => {
     if (status !== "done") {
@@ -49,11 +98,34 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
   }, [status, generation, target]);
 
   if (status !== "done") {
+    if (status === "scanning") {
+      return (
+        <aside className="db-inspector db-scroll" aria-label="Inspector">
+          <div className="db-inspector-empty">
+            <span className="db-inspector-scan-badge">
+              <span className="db-spinner" style={{ width: 15, height: 15, borderWidth: 2 }} />
+            </span>
+            <h3>Scanning…</h3>
+            <p>Details for the selected item appear here the moment the scan finishes.</p>
+          </div>
+        </aside>
+      );
+    }
     return (
       <aside className="db-inspector db-scroll" aria-label="Inspector">
-        <div className="db-inspector-empty">
-          <EyeIcon size={26} />
-          <p>Scan something to see details about folders and files here.</p>
+        <div className="db-inspector-empty db-inspector-welcome">
+          <span className="db-inspector-scan-badge">
+            <EyeIcon size={17} />
+          </span>
+          <h3>Inspector</h3>
+          <p>
+            Select any folder or file — the map, the list, or the tree — and its size, largest
+            items and cleanup actions live here.
+          </p>
+          <div className="db-inspector-hints">
+            <span><FolderIcon size={11} /> Double-click a folder to drill in</span>
+            <span><SparklesIcon size={11} /> Click to select, inspect, clean</span>
+          </div>
         </div>
       </aside>
     );
@@ -94,7 +166,7 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
           </span>
         </div>
       </div>
-      <p className="db-path">{details.path}</p>
+      <p className="db-path" ref={pathRef} title={details.path}>{fittedPath}</p>
       <div className="db-big-size">
         <strong className="tnum">{bytes(details.size)}</strong>
         <span className="tnum">{(details.shareOfScan * 100).toFixed(1)}% of scan</span>

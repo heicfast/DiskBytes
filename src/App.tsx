@@ -123,6 +123,18 @@ function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  // Every user-started scan lands in Recents (paths display as-is;
+  // "ThisPC" gets its friendly label). Runs on the scanning transition
+  // so the entry exists even if the scan is cancelled midway. Reads the
+  // store directly — no stale-closure risk on the [status] dep.
+  useEffect(() => {
+    if (status !== "scanning") return;
+    const t = useScanStore.getState().scanTarget;
+    if (t && t.length > 0) {
+      pushRecent(t.toLowerCase() === "thispc" ? "This PC" : t);
+    }
+  }, [status]);
+
   // Breadcrumb chain refreshes on navigation + generation changes.
   useEffect(() => {
     if (status !== "done") {

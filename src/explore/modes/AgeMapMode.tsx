@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { CheckIcon, FileIcon, PlusIcon } from "../../components/Icon";
+import { TailPath } from "../../components/TailPath";
 import { getAgeMap, type AgeMapDataData, type BigRowData } from "../../viz/exploreIpc";
 import { bytes, relativeAge } from "../../lib/format";
 import { useCleanupStore } from "../../state/cleanup";
@@ -177,7 +178,7 @@ export function AgeMapMode(props: AgeMapModeProps) {
                 <FileIcon size={15} />
                 <span>
                   <strong>{row.name}</strong>
-                  <small title={row.path}>{row.path}</small>
+                  <small><TailPath path={row.path} /></small>
                 </span>
                 <button
                   type="button"

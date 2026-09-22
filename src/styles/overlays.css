@@ -66,6 +66,18 @@
   background: var(--background);
   box-shadow: var(--shadow-pop);
   padding: 5px;
+  transform-origin: top left;
+  animation: db-ctx-in 120ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes db-ctx-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 .db-context .db-ctx-item {
   width: 100%;
@@ -109,17 +121,7 @@
   background: var(--background);
   box-shadow: var(--shadow-pop);
   overflow: hidden;
-  animation: db-pop-in var(--fade) ease both;
-}
-@keyframes db-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  transform-origin: top right; /* the framer spring scales from the anchor */
 }
 .db-pop-head {
   flex: none;
@@ -225,15 +227,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.db-pop-row small {
+.db-pop-row small,
+.db-pop-row .db-pop-path {
   font: 9.5px/1.35 var(--font-mono);
   color: var(--text-tertiary);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  unicode-bidi: plaintext;
 }
 .db-pop-row .db-pop-reason {
   color: var(--text-tertiary);
@@ -554,12 +553,25 @@
   color: var(--ink);
 }
 
-/* Toast (bottom-center, transient feedback) */
+/* Toast (bottom-center, transient feedback) — springs up from below
+ * with a slight overshoot; icon carries the ink accent. */
+@keyframes db-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px) scale(0.97);
+  }
+  60% {
+    transform: translateX(-50%) translateY(-2px) scale(1.005);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
 .db-toast {
   position: fixed;
   left: 50%;
   bottom: 26px;
-  transform: translateX(-50%);
   z-index: 120;
   display: flex;
   align-items: center;
@@ -571,5 +583,8 @@
   padding: 10px 16px;
   font-size: 12px;
   font-weight: 620;
-  animation: db-fade-up 160ms ease both;
+  animation: db-toast-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+.db-toast svg {
+  color: var(--ink);
 }

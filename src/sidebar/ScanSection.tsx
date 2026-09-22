@@ -2,12 +2,22 @@
  * Sidebar §1 (spec §6.1–6.3): the big scan ink button, Home / Folder…
  * outline pair, fixed-drive chips. Every action switches to Explore
  * (spec: "Sidebar actions always switch to the Explore tab").
+ *
+ * State-aware behavior (senior-UX rules):
+ * - While a scan runs, the primary button morphs into "Stop scan" so
+ *   there is ALWAYS a way to cancel (the scan store reverts to the
+ *   previous tree optimistically).
+ * - Home navigates INTO the current tree when the home path was part
+ *   of the last scan (instant, no rescan); it only starts a new scan
+ *   when no tree exists or the path is outside it.
+ * - Drive chips stay scan actions ("Scan C:") — that is their contract.
  */
 import { useEffect, useState } from "react";
-import { FolderIcon, HardDriveIcon, HomeIcon, ScanLineIcon } from "../components/Icon";
+import { FolderIcon, HardDriveIcon, HomeIcon, ScanLineIcon, SquareIcon } from "../components/Icon";
 import { OutlineButton } from "../components/buttons";
 import { SCAN_THIS_PC } from "../lib/platform";
 import { invoke } from "../lib/ipc";
+import { useExploreStore } from "../state/explore";
 import { useScanStore } from "../state/scan";
 import { useViewStore } from "../state/view";
 import { EVENTS, track } from "../lib/analytics";
@@ -19,8 +29,11 @@ interface DriveChip {
 
 export function ScanSection() {
   const startScan = useScanStore((s) => s.startScan);
+  const cancelScan = useScanStore((s) => s.cancelScan);
   const status = useScanStore((s) => s.status);
+  const generation = useScanStore((s) => s.generation);
   const setTab = useViewStore((s) => s.setTab);
+  const openFolder = useExploreStore((s) => s.openFolder);
   const [drives, setDrives] = useState<DriveChip[]>([]);
   const [home, setHome] = useState<string | null>(null);
 
@@ -45,6 +58,26 @@ export function ScanSection() {
     void startScan(target);
   };
 
+  /** Navigate-first Home: jump to the home folder inside the CURRENT
+   * scan when possible; fall back to scanning it. Never wipes a
+   * finished view just to move somewhere. */
+  const goHome = async () => {
+    if (!home) return;
+    setTab("explore");
+    if (status === "done") {
+      try {
+        const id = await invoke<number | null>("resolve_path", { generation, path: home });
+        if (id != null) {
+          openFolder(id);
+          return;
+        }
+      } catch {
+        /* resolve failed: fall through to a fresh scan */
+      }
+    }
+    scan(home);
+  };
+
   const pickFolder = async () => {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
@@ -54,7 +87,7 @@ export function ScanSection() {
       }
     } catch {
       // Dialog unavailable (plain browser mock): fall back to Home.
-      if (home) scan(home);
+      if (home) void goHome();
     }
   };
 
@@ -62,12 +95,23 @@ export function ScanSection() {
 
   return (
     <section aria-label="Scan targets">
-      <button type="button" className="db-ink-button" disabled={busy} onClick={() => scan("ThisPC")}>
-        <ScanLineIcon size={17} />
-        {SCAN_THIS_PC}
-      </button>
+      {busy ? (
+        <button type="button" className="db-ink-button db-stop-scan" onClick={() => void cancelScan()}>
+          <SquareIcon size={15} />
+          Stop scan
+        </button>
+      ) : (
+        <button type="button" className="db-ink-button" onClick={() => scan("ThisPC")}>
+          <ScanLineIcon size={17} />
+          {SCAN_THIS_PC}
+        </button>
+      )}
       <div className="db-sidebar-actions">
-        <OutlineButton onClick={() => home && scan(home)} disabled={busy || !home}>
+        <OutlineButton
+          onClick={() => void goHome()}
+          disabled={busy || !home}
+          title={busy ? "A scan is running" : home ? `Go to ${home}` : undefined}
+        >
           <HomeIcon size={14} /> Home
         </OutlineButton>
         <OutlineButton onClick={() => void pickFolder()} disabled={busy}>

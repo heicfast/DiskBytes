@@ -63,34 +63,24 @@ input:focus:not(:focus-visible) {
   background: var(--ink-soft);
 }
 
-/* Scrollbars — overlay-style: invisible until the container is hovered
- * (matches the reference app: no resting scroll chrome; the 8px thumb
- * fades in on hover, darkens on direct interaction). */
+/* Scrollbars — native OVERLAY style (product-owner ask: "hide the
+ * scroll navigation"). Standard `scrollbar-width` / `scrollbar-color`
+ * ONLY: no `::-webkit-scrollbar` pseudo rules anywhere — those force a
+ * classic reserved-gutter scrollbar in Chromium/WebView2 (the dead 8px
+ * strip) and DISABLE the native auto-hiding overlay in WKWebView.
+ * Chromium 121+/WebView2 evergreen honor the standard props; the thumb
+ * is transparent at rest and fades in on container hover. */
 .db-scroll {
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.25s ease;
+}
+.db-scroll:hover,
+.db-scroll:focus-within {
   scrollbar-color: var(--border) transparent;
 }
-.db-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.db-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.db-scroll::-webkit-scrollbar-thumb {
-  background: transparent;
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background-clip: content-box;
-  transition: background 0.18s ease;
-}
-.db-scroll:hover::-webkit-scrollbar-thumb {
-  background: var(--border);
-  background-clip: content-box;
-}
-.db-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
-  background-clip: content-box;
+.db-scroll:focus-within:hover {
+  scrollbar-color: var(--text-tertiary) transparent;
 }
 
 /* Pressable — shared active feedback (scale 0.985 / opacity 0.75) */
@@ -167,15 +157,10 @@ kbd {
   }
 }
 
-/* Utility truncation with middle-ellipsis for paths */
-.db-mid-ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  unicode-bidi: plaintext;
-}
+/* (The old `.db-mid-ellipsis` utility was removed — its
+ * direction:rtl + unicode-bidi:plaintext pair silently clipped long
+ * paths with no ellipsis. Path truncation now lives in
+ * src/lib/fitPath.ts, measured against the real box.) */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -185,4 +170,18 @@ kbd {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* Theme crossfade (View Transitions API — useTheme.toggle). A soft
+ * 220 ms root blend instead of the hard palette flip. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: ease;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
 }

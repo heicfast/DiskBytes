@@ -6,8 +6,8 @@
  * chip, preview) into every mode.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, useAnimate } from "framer-motion";
-import { ExternalLinkIcon, FolderIcon, ScanLineIcon } from "../components/Icon";
+import { animate, motion, useMotionValue, useTransform } from "framer-motion";
+import { ExternalLinkIcon, FolderIcon, HardDriveIcon, ScanLineIcon, SquareIcon } from "../components/Icon";
 import { EmptyState } from "../components/buttons";
 import { UnreadableNotice } from "../sidebar";
 import { ExploreHeader } from "./ExploreHeader";
@@ -30,11 +30,28 @@ import { getHoverDetails } from "../viz/layoutIpc";
 import { getNodeDetails, type NodeDetailsData } from "../viz/exploreIpc";
 import { EVENTS, track } from "../lib/analytics";
 
+/** Smoothly-rolling "N files · X GB" live counter (motion values, no
+ * per-tick React re-render churn — the 150 ms IPC ticks TWEEN into each
+ * other so the numbers glide instead of jumping). */
+function ScanCounter({ files, totalBytes }: { files: number; totalBytes: number }) {
+  const filesMv = useMotionValue(files);
+  const bytesMv = useMotionValue(totalBytes);
+  useEffect(() => {
+    void animate(filesMv, files, { duration: 0.5, ease: "easeOut" });
+    void animate(bytesMv, totalBytes, { duration: 0.5, ease: "easeOut" });
+  }, [files, totalBytes, filesMv, bytesMv]);
+  const text = useTransform([filesMv, bytesMv], ([f, b]: number[]) =>
+    `${Math.max(0, Math.round(f)).toLocaleString()} files · ${bytes(Math.max(0, b))}`,
+  );
+  return <motion.span className="db-live-counter tnum" aria-live="polite">{text}</motion.span>;
+}
+
 export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) {
   const status = useScanStore((s) => s.status);
   const progress = useScanStore((s) => s.progress);
   const error = useScanStore((s) => s.error);
   const scanTarget = useScanStore((s) => s.scanTarget);
+  const cancelScan = useScanStore((s) => s.cancelScan);
   const generation = useScanStore((s) => s.generation);
   const currentFolder = useExploreStore((s) => s.currentFolder);
   const selectedNode = useExploreStore((s) => s.selectedNode);
@@ -47,22 +64,18 @@ export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) 
   const chip = useRef<HoverChipHandle>(null);
   const [menu, setMenu] = useState<ItemMenuState | null>(null);
   const [folderView, setFolderView] = useState<NodeDetailsData | null>(null);
-  const [counterValue, setCounterValue] = useState("0");
-  const [scope, animValue] = useAnimate();
 
-  // Live "N files · X GB" numeric text transition (spec §7 scanning state)
+  // Throttled path ticker: the raw currentPath changes every 150 ms
+  // (unreadable strobe); display it at ~600 ms with a soft crossfade.
+  const [displayPath, setDisplayPath] = useState("");
+  const lastPathSwap = useRef(0);
   useEffect(() => {
-    if (status !== "scanning" || !progress) return;
-    setCounterValue(`${progress.files.toLocaleString()} files · ${bytes(progress.bytes)}`);
+    if (status !== "scanning" || !progress?.currentPath) return;
+    const now = performance.now();
+    if (now - lastPathSwap.current < 600) return;
+    lastPathSwap.current = now;
+    setDisplayPath(progress.currentPath);
   }, [status, progress]);
-
-  useEffect(() => {
-    if (status !== "scanning") return;
-    const el = scope.current;
-    if (!el) return; // ref attaches after paint — null-guard (weak-map crash)
-    void animValue(el, { scale: [1, 1.04, 1] }, { duration: 0.5, repeat: Infinity });
-    return () => void animValue(el, { scale: 1 }, { duration: 0.1 });
-  }, [status, scope, animValue]);
 
   // Folder header info (name + stats for the current folder)
   useEffect(() => {
@@ -242,15 +255,25 @@ export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) 
   if (status === "scanning") {
     return (
       <div className="db-main">
-        <div className="db-state">
-          <span className="db-spinner" />
+        <div className="db-state db-scanning">
+          {/* Premium radial disk sweep (transform-only CSS, 60 fps) */}
+          <div className="db-scan-visual" aria-hidden="true">
+            <span className="db-scan-ring r1" />
+            <span className="db-scan-ring r2" />
+            <span className="db-scan-ring r3" />
+            <span className="db-scan-sweep" />
+            <span className="db-scan-core">
+              <HardDriveIcon size={22} />
+            </span>
+          </div>
           <h2>Scanning…</h2>
-          <motion.span ref={scope} className="db-live-counter tnum" aria-live="polite">
-            {counterValue}
-          </motion.span>
+          <ScanCounter files={progress?.files ?? 0} totalBytes={progress?.bytes ?? 0} />
           <span className="db-current-path" title={progress?.currentPath ?? ""}>
-            {progress?.currentPath ?? ""}
+            {displayPath || "\u00A0"}
           </span>
+          <button type="button" className="db-outline db-cancel-scan" onClick={() => void cancelScan()}>
+            <SquareIcon size={13} /> Stop scan
+          </button>
         </div>
       </div>
     );
@@ -314,64 +337,75 @@ export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) 
         <UnreadableNotice />
       </div>
       <section className="db-visual-stage db-scroll" aria-label={`${mode} visualization`}>
-        {mode === "Folders" && (
-          <FoldersMode
-            generation={generation}
-            folder={currentFolder}
-            filter={nameFilter}
-            selectedId={selectedNode}
-            onSelect={select}
-            onOpen={actions.open}
-            onPreview={onPreview}
-            onContextMenu={(id, x, y) => setMenu({ id, x, y })}
-            onHover={hoverFetch}
-          />
-        )}
-        {CANVAS_MODES.has(mode) && (
-          <CanvasMode
-            generation={generation}
-            folder={currentFolder}
-            mode={mode}
-            selectedId={selectedNode}
-            onSelect={select}
-            onOpen={actions.open}
-            onContextMenu={(id, x, y) => setMenu({ id, x, y })}
-            onHover={hoverFetch}
-          />
-        )}
-        {mode === "Top Sizes" && (
-          <TopSizesMode
-            generation={generation}
-            folder={currentFolder}
-            filter={nameFilter}
-            selectedId={selectedNode}
-            onSelect={select}
-            onOpen={actions.open}
-            onContextMenu={(id, x, y) => setMenu({ id, x, y })}
-            onHover={hoverFetch}
-          />
-        )}
-        {mode === "Age Map" && (
-          <AgeMapMode
-            generation={generation}
-            folder={currentFolder}
-            onSelect={select}
-            onHover={hoverFetch}
-            onContextMenu={(id, x, y) => setMenu({ id, x, y })}
-          />
-        )}
-        {mode === "List" && (
-          <ListMode
-            generation={generation}
-            folder={currentFolder}
-            filter={nameFilter}
-            selectedId={selectedNode}
-            onSelect={select}
-            onOpen={actions.open}
-            onContextMenu={(id, x, y) => setMenu({ id, x, y })}
-            onHover={hoverFetch}
-          />
-        )}
+        {/* Keyed swap: instant unmount of the old view, 150 ms fade-up
+         * for the new one (mode switch / drill-down / rescan). The
+         * header + toolbar above stay mounted — only the data swaps. */}
+        <motion.div
+          key={`${generation}:${currentFolder}:${mode}`}
+          className="db-stage-swap"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+        >
+          {mode === "Folders" && (
+            <FoldersMode
+              generation={generation}
+              folder={currentFolder}
+              filter={nameFilter}
+              selectedId={selectedNode}
+              onSelect={select}
+              onOpen={actions.open}
+              onPreview={onPreview}
+              onContextMenu={(id, x, y) => setMenu({ id, x, y })}
+              onHover={hoverFetch}
+            />
+          )}
+          {CANVAS_MODES.has(mode) && (
+            <CanvasMode
+              generation={generation}
+              folder={currentFolder}
+              mode={mode}
+              selectedId={selectedNode}
+              onSelect={select}
+              onOpen={actions.open}
+              onContextMenu={(id, x, y) => setMenu({ id, x, y })}
+              onHover={hoverFetch}
+            />
+          )}
+          {mode === "Top Sizes" && (
+            <TopSizesMode
+              generation={generation}
+              folder={currentFolder}
+              filter={nameFilter}
+              selectedId={selectedNode}
+              onSelect={select}
+              onOpen={actions.open}
+              onContextMenu={(id, x, y) => setMenu({ id, x, y })}
+              onHover={hoverFetch}
+            />
+          )}
+          {mode === "Age Map" && (
+            <AgeMapMode
+              generation={generation}
+              folder={currentFolder}
+              onSelect={select}
+              onHover={hoverFetch}
+              onContextMenu={(id, x, y) => setMenu({ id, x, y })}
+            />
+          )}
+          {mode === "List" && (
+            <ListMode
+              generation={generation}
+              folder={currentFolder}
+              filter={nameFilter}
+              selectedId={selectedNode}
+              onSelect={select}
+              onOpen={actions.open}
+              onContextMenu={(id, x, y) => setMenu({ id, x, y })}
+              onHover={hoverFetch}
+            />
+          )}
+        </motion.div>
       </section>
 
       <HoverChip ref={chip} sizeFmt={bytes} />

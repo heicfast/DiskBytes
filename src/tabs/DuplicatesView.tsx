@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { CopyIcon, FileIcon, SearchIcon, CheckIcon, Trash2Icon } from "../components/Icon";
+import { TailPath } from "../components/TailPath";
 import { EmptyState } from "../components/buttons";
 import { invoke } from "../lib/ipc";
 import { bytes } from "../lib/format";
@@ -170,7 +171,7 @@ export function DuplicatesView() {
                   <div key={p} className="db-dup-file">
                     <FileIcon size={15} />
                     <div>
-                      <strong>{p}</strong>
+                      <TailPath path={p} />
                       <small>{bytes(g.size)}</small>
                     </div>
                     {isKept ? (
