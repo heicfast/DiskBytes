@@ -7,7 +7,8 @@
 
 use crate::error::CoreError;
 use crate::layout::{
-    check_geometry, node_color, pack_rgba, Cell, ColorMode, LayoutBuffer, LayoutMeta, MAX_CELLS,
+    check_geometry, depth_below, effective_branch_root, node_color, pack_rgba, Cell, ColorMode,
+    LayoutBuffer, LayoutMeta, MAX_CELLS,
 };
 use crate::scan::node::Tree;
 
@@ -15,6 +16,12 @@ use crate::scan::node::Tree;
 const MIN_R: f32 = 1.5;
 /// Base dot radius at the root's children (scales with viewport).
 const DOT_BASE: f32 = 26.0;
+/// Alpha for top-level dots — the root chain plus the effective
+/// top-level branches: solid, matching the reference's bold branch dots.
+const ALPHA_TOP: u32 = 0xFF;
+/// Alpha for nested child dots (slight translucency so the hierarchy
+/// reads and links/labels stay legible).
+const ALPHA_NESTED: u32 = 0xCC;
 
 /// Layout the subtree under `node` as a radial mind map.
 ///
@@ -39,6 +46,11 @@ pub fn mindmap(
     let r_max = width.min(height) / 2.0 - 6.0;
     let mut cells: Vec<Cell> = Vec::with_capacity(512);
     let mut truncated = false;
+    // By-folder families attach at the effective branch root (descend
+    // single-sizeable-child chains like "This PC" → "C:"); dots at or
+    // above that level form the solid "top-level" alpha tier.
+    let branch_root = effective_branch_root(tree, node);
+    let branch_level = depth_below(tree, branch_root, node) + 1;
     // Root dot.
     cells.push(Cell::dot(
         node,
@@ -64,6 +76,8 @@ pub fn mindmap(
             &mut cells,
             &mut truncated,
             0,
+            branch_root,
+            branch_level,
         );
     }
     Ok(LayoutBuffer {
@@ -86,7 +100,8 @@ pub fn mindmap(
 }
 
 /// Place the children of `node` on the ring at radius `ring_r`, angular
-/// spans ∝ weights, then recurse within each span.
+/// spans ∝ weights, then recurse within each span. `top_index` is the
+/// inherited by-folder family; `branch_root`'s children re-assign it.
 #[allow(clippy::too_many_arguments)]
 fn layout_branches(
     tree: &Tree,
@@ -101,6 +116,8 @@ fn layout_branches(
     cells: &mut Vec<Cell>,
     truncated: &mut bool,
     top_index: usize,
+    branch_root: u32,
+    branch_level: u32,
 ) {
     if depth_left == 0 || ring_r <= 4.0 {
         return;
@@ -132,11 +149,22 @@ fn layout_branches(
         // Dot radius ∝ sqrt(share of parent) — area ∝ bytes share.
         let share = c.on_disk as f32 / total as f32;
         let r = (DOT_BASE * share.sqrt()).max(MIN_R);
-        let rgba = pack_rgba(match color {
-            ColorMode::ByFolder => node_color(tree, id, color, now, i, depth_here as u16, i),
+        // One pastel family per effective top-level branch, inherited by
+        // every descendant (shade still varies by depth + sibling index).
+        let fam = if node == branch_root { i } else { top_index };
+        let rgb = match color {
+            ColorMode::ByFolder => node_color(tree, id, color, now, fam, depth_here as u16, i),
             ColorMode::ByType => c.category().color(),
             ColorMode::ByAge => node_color(tree, id, color, now, 0, 0, i),
-        });
+        };
+        // Top-level dots (root chain + branches) stay solid; nested child
+        // dots get the slightly translucent tier.
+        let alpha = if depth_here <= branch_level {
+            ALPHA_TOP
+        } else {
+            ALPHA_NESTED
+        };
+        let rgba = (rgb << 8) | alpha;
         cells.push(Cell::dot(id, depth_here as u16, rgba, x, y, r, cx, cy));
         if c.is_dir() && c.child_count > 0 && depth_left > 1 {
             layout_branches(
@@ -151,7 +179,9 @@ fn layout_branches(
                 now,
                 cells,
                 truncated,
-                if depth_here == 1 { i } else { top_index },
+                fam,
+                branch_root,
+                branch_level,
             );
         }
         cursor += span;
@@ -222,5 +252,67 @@ mod tests {
     fn invalid_geometry_rejected() {
         let t = build();
         assert!(mindmap(&t, 0, 10.0, 0.0, 2, ColorMode::ByAge, 1).is_err());
+    }
+
+    /// "This PC" → single "C:" drive → 6 folders with distinct sizes
+    /// (each holding one file) — the shape that collapsed the whole
+    /// mind map into one pastel family.
+    fn build_single_drive() -> Tree {
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "This PC");
+        t.append_batch(0, vec![dir("C:")]); // id 1
+        t.append_batch(
+            1,
+            vec![
+                dir("Users"),    // 2
+                dir("Windows"),  // 3
+                dir("Programs"), // 4
+                dir("Data"),     // 5
+                dir("Temp"),     // 6
+                dir("Logs"),     // 7
+            ],
+        );
+        for (id, size) in [
+            (2u32, 600u64),
+            (3, 500),
+            (4, 400),
+            (5, 300),
+            (6, 200),
+            (7, 100),
+        ] {
+            t.append_batch(id, vec![file("f.bin", size, size, 1)]);
+        }
+        rollup::finalize(&mut t);
+        t
+    }
+
+    #[test]
+    fn single_child_root_assigns_branch_families_and_nested_alpha() {
+        let t = build_single_drive();
+        let buf = mindmap(&t, 0, 900.0, 700.0, 3, ColorMode::ByFolder, 1).unwrap();
+        // Depth-2 dots = C:'s children (the effective top-level branches):
+        // distinct pastel families, solid top-level alpha.
+        let branch: Vec<&Cell> = buf.cells.iter().filter(|c| c.depth == 2).collect();
+        assert!(branch.len() >= 3, "all branch dots must emit");
+        let mut rgb: Vec<u32> = branch.iter().map(|c| c.rgba >> 8).collect();
+        rgb.sort_unstable();
+        rgb.dedup();
+        assert!(rgb.len() >= 3, "branch dots must span >= 3 pastel families");
+        assert!(
+            branch.iter().all(|c| c.rgba & 0xFF == ALPHA_TOP),
+            "top-level dots stay solid"
+        );
+        // Nested child dots (files inside the branches) inherit their
+        // branch family and use the translucent nested tier.
+        let nested: Vec<&Cell> = buf.cells.iter().filter(|c| c.depth == 3).collect();
+        assert!(nested.len() >= 3, "nested dots must emit");
+        let mut rgb: Vec<u32> = nested.iter().map(|c| c.rgba >> 8).collect();
+        rgb.sort_unstable();
+        rgb.dedup();
+        assert!(
+            rgb.len() >= 3,
+            "nested dots must inherit distinct branch families"
+        );
+        assert!(nested.iter().all(|c| c.rgba & 0xFF == ALPHA_NESTED));
     }
 }

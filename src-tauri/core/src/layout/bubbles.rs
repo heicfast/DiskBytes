@@ -18,7 +18,8 @@
 
 use crate::error::CoreError;
 use crate::layout::{
-    check_geometry, node_color, pack_rgba, Cell, ColorMode, LayoutBuffer, LayoutMeta, MAX_CELLS,
+    check_geometry, depth_below, effective_branch_root, node_color, Cell, ColorMode, LayoutBuffer,
+    LayoutMeta, MAX_CELLS,
 };
 use crate::scan::node::Tree;
 
@@ -28,6 +29,13 @@ const PAD: f32 = 3.0;
 const GAP: f32 = 2.0;
 /// Minimum radius to emit (sub-pixel bubbles skipped).
 const MIN_R: f32 = 1.0;
+/// Alpha for the primary tier — the root container, the single-child
+/// chain and the effective top-level branches: the reference's soft
+/// translucent fill so nested circles read through.
+const ALPHA_PRIMARY: u32 = 0xB4;
+/// Alpha for nested child bubbles (slightly more opaque so they separate
+/// from the soft parent fill).
+const ALPHA_NESTED: u32 = 0xD9;
 
 /// One node in the bubble hierarchy (geometry is computed at emission).
 #[derive(Debug, Clone)]
@@ -58,6 +66,11 @@ pub fn bubbles(
     let total = n.on_disk;
     let root_r = width.min(height) / 2.0 - 2.0;
     let root = build_bubble(tree, node, depth);
+    // By-folder families attach at the effective branch root (descend
+    // single-sizeable-child chains like "This PC" → "C:"); bubbles at
+    // or above that level form the soft "primary" translucency tier.
+    let branch_root = effective_branch_root(tree, node);
+    let branch_level = depth_below(tree, branch_root, node) + 1;
     // Emit cells (root bubble centered).
     let cx = width / 2.0;
     let cy = height / 2.0;
@@ -75,6 +88,8 @@ pub fn bubbles(
         &mut cells,
         &mut truncated,
         0,
+        branch_root,
+        branch_level,
     );
     Ok(LayoutBuffer {
         cells,
@@ -120,7 +135,8 @@ fn build_bubble(tree: &Tree, id: u32, depth_left: u32) -> Bubble {
 type Placed = (usize, f32, f32, f32);
 
 /// Emit the circle for `b` at `(cx, cy)` with radius `drawn_r`, then
-/// allocate + pack + recursively emit its children inside.
+/// allocate + pack + recursively emit its children inside. `top_index` is
+/// the inherited by-folder family; `branch_root`'s children re-assign it.
 #[allow(clippy::too_many_arguments)]
 fn emit(
     tree: &Tree,
@@ -134,6 +150,8 @@ fn emit(
     cells: &mut Vec<Cell>,
     truncated: &mut bool,
     top_index: usize,
+    branch_root: u32,
+    branch_level: u32,
 ) {
     if cells.len() >= MAX_CELLS {
         *truncated = true;
@@ -142,13 +160,21 @@ fn emit(
     if drawn_r < MIN_R {
         return;
     }
-    let rgba = pack_rgba(match color {
+    let rgb = match color {
         ColorMode::ByFolder => {
             node_color(tree, b.id, color, now, top_index, depth as u16, top_index)
         }
         ColorMode::ByType => tree.dominant_category(b.id).color(),
         ColorMode::ByAge => node_color(tree, b.id, color, now, 0, 0, top_index),
-    });
+    };
+    // Primary tier: the root/chain containers and the effective top-level
+    // branches (soft fill); deeper descendants are the nested tier.
+    let alpha = if depth <= branch_level {
+        ALPHA_PRIMARY
+    } else {
+        ALPHA_NESTED
+    };
+    let rgba = (rgb << 8) | alpha;
     cells.push(Cell::circle(b.id, depth as u16, rgba, cx, cy, drawn_r));
 
     // Allocate children by sqrt area share of the usable radius.
@@ -198,7 +224,9 @@ fn emit(
             now,
             cells,
             truncated,
-            if depth == 0 { i } else { top_index },
+            if b.id == branch_root { i } else { top_index },
+            branch_root,
+            branch_level,
         );
     }
 }
@@ -335,5 +363,74 @@ mod tests {
             (ratio_ab - 9.0 / 4.0).abs() < 0.6,
             "a/b area ratio {ratio_ab}"
         );
+    }
+
+    /// "This PC" → single "C:" drive → 6 folders with distinct sizes
+    /// (each holding one file) — the shape that collapsed the whole
+    /// bubble map into one pastel family.
+    fn build_single_drive() -> Tree {
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "This PC");
+        t.append_batch(0, vec![dir("C:")]); // id 1
+        t.append_batch(
+            1,
+            vec![
+                dir("Users"),    // 2
+                dir("Windows"),  // 3
+                dir("Programs"), // 4
+                dir("Data"),     // 5
+                dir("Temp"),     // 6
+                dir("Logs"),     // 7
+            ],
+        );
+        for (id, size) in [
+            (2u32, 600u64),
+            (3, 500),
+            (4, 400),
+            (5, 300),
+            (6, 200),
+            (7, 100),
+        ] {
+            t.append_batch(id, vec![file("f.bin", size, size, 1)]);
+        }
+        rollup::finalize(&mut t);
+        t
+    }
+
+    #[test]
+    fn single_child_root_assigns_branch_families_and_translucency() {
+        let t = build_single_drive();
+        let buf = bubbles(&t, 0, 800.0, 800.0, 3, ColorMode::ByFolder, 1).unwrap();
+        // Depth-2 bubbles = C:'s children (the effective top-level
+        // branches): distinct pastel families in the soft primary tier.
+        let branch: Vec<&Cell> = buf.cells.iter().filter(|c| c.depth == 2).collect();
+        assert!(branch.len() >= 3, "all branch bubbles must emit");
+        let mut rgb: Vec<u32> = branch.iter().map(|c| c.rgba >> 8).collect();
+        rgb.sort_unstable();
+        rgb.dedup();
+        assert!(
+            rgb.len() >= 3,
+            "branch bubbles must span >= 3 pastel families"
+        );
+        assert!(
+            branch.iter().all(|c| c.rgba & 0xFF == ALPHA_PRIMARY),
+            "branch bubbles are the soft primary tier"
+        );
+        // The root/chain containers stay in the primary tier too.
+        for c in buf.cells.iter().filter(|c| c.depth <= 1) {
+            assert_eq!(c.rgba & 0xFF, ALPHA_PRIMARY, "container stays primary");
+        }
+        // Nested child bubbles (files inside the branches) inherit their
+        // branch family and use the more opaque nested tier.
+        let nested: Vec<&Cell> = buf.cells.iter().filter(|c| c.depth == 3).collect();
+        assert!(nested.len() >= 3, "nested bubbles must emit");
+        let mut rgb: Vec<u32> = nested.iter().map(|c| c.rgba >> 8).collect();
+        rgb.sort_unstable();
+        rgb.dedup();
+        assert!(
+            rgb.len() >= 3,
+            "nested bubbles must inherit distinct branch families"
+        );
+        assert!(nested.iter().all(|c| c.rgba & 0xFF == ALPHA_NESTED));
     }
 }

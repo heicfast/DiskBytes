@@ -6,7 +6,8 @@
 
 use crate::error::CoreError;
 use crate::layout::{
-    check_geometry, node_color, pack_rgba, Cell, ColorMode, LayoutBuffer, LayoutMeta, MAX_CELLS,
+    check_geometry, effective_branch_root, node_color, pack_rgba, Cell, ColorMode, LayoutBuffer,
+    LayoutMeta, MAX_CELLS,
 };
 use crate::scan::node::Tree;
 
@@ -40,6 +41,10 @@ pub fn flame(
     };
     let mut cells: Vec<Cell> = Vec::with_capacity(512);
     let mut truncated = false;
+    // By-folder families attach at the effective branch root: descend
+    // single-sizeable-child chains ("This PC" → "C:") so C:'s children
+    // become the top-level branches (spec §7 color modes).
+    let branch_root = effective_branch_root(tree, node);
     // The root block spans the full width on row 0 when depth >= 1.
     if depth > 0 && total > 0 {
         cells.push(Cell::rect(
@@ -64,6 +69,7 @@ pub fn flame(
             &mut cells,
             &mut truncated,
             0,
+            branch_root,
         );
     }
     Ok(LayoutBuffer {
@@ -86,7 +92,8 @@ pub fn flame(
 }
 
 /// Recursive row layout: children of `node` inside x-span `(x0..x1)` on
-/// row `depth_here`, each beneath its parent's span.
+/// row `depth_here`, each beneath its parent's span. `top_index` is the
+/// inherited by-folder family; `branch_root`'s children re-assign it.
 #[allow(clippy::too_many_arguments)]
 fn layout_row(
     tree: &Tree,
@@ -101,6 +108,7 @@ fn layout_row(
     cells: &mut Vec<Cell>,
     truncated: &mut bool,
     top_index: usize,
+    branch_root: u32,
 ) {
     if depth_left == 0 {
         return;
@@ -131,8 +139,11 @@ fn layout_row(
         if w < MIN_W {
             continue; // Skip sub-1px blocks.
         }
+        // One pastel family per effective top-level branch, inherited by
+        // every descendant (shade still varies by depth + sibling index).
+        let fam = if node == branch_root { i } else { top_index };
         let rgba = pack_rgba(match color {
-            ColorMode::ByFolder => node_color(tree, id, color, now, i, depth_here as u16, i),
+            ColorMode::ByFolder => node_color(tree, id, color, now, fam, depth_here as u16, i),
             ColorMode::ByType => c.category().color(),
             ColorMode::ByAge => node_color(tree, id, color, now, 0, 0, i),
         });
@@ -150,7 +161,8 @@ fn layout_row(
                 now,
                 cells,
                 truncated,
-                if depth_here == 1 { i } else { top_index },
+                fam,
+                branch_root,
             );
         }
         cursor += w + GAP_X;

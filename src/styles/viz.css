@@ -19,6 +19,7 @@
   border-radius: var(--radius-l);
   overflow: hidden;
   background: var(--background);
+  box-shadow: inset 0 1px 3px rgba(29, 29, 31, 0.03);
 }
 .db-viz-canvas-shell canvas {
   position: absolute;
@@ -138,8 +139,8 @@
   inset: 0 auto 0 0;
   width: calc(var(--share, 30%) - 2px);
   min-width: 3px;
-  background: var(--tone, var(--pastel-blue));
-  border-radius: var(--radius-s) 0 0 var(--radius-s);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--tone, var(--pastel-blue)) 82%, white), var(--tone, var(--pastel-blue)));
+  border-radius: 999px;
   transition: width var(--spring) ease;
 }
 .rank-bar > span {
@@ -225,7 +226,7 @@
   height: 100%;
   min-width: 8px;
   border-radius: 7px;
-  background: var(--age-tone, var(--age-1));
+  background: linear-gradient(90deg, color-mix(in oklab, var(--age-tone, var(--age-1)) 78%, white), var(--age-tone, var(--age-1)));
 }
 .age-row strong {
   color: var(--text);
@@ -428,7 +429,7 @@
   white-space: nowrap;
 }
 .db-list-row > i {
-  height: 5px;
+  height: 6px;
   border-radius: 4px;
   background: var(--track);
   overflow: hidden;

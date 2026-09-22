@@ -100,9 +100,9 @@
   width: 26px;
   height: 26px;
   border-radius: var(--radius-s);
-  background: var(--ink);
+  background: var(--ink-grad);
   color: var(--on-ink);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--ink-glow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 .db-brand strong {
   font-size: 14.5px;
@@ -146,9 +146,10 @@
 .db-tab-pill {
   position: absolute;
   inset: 0;
-  background: var(--ink);
+  background: var(--ink-grad);
   border-radius: var(--radius-m);
   z-index: -1;
+  box-shadow: 0 2px 8px rgba(255, 107, 74, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 /* Breadcrumb */

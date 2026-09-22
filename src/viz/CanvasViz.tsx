@@ -6,6 +6,7 @@
  * and ResizeObserver are handled; hit-testing is local JS geometry.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { bytes } from "../lib/format";
 import { abbreviate } from "./abbrev";
 import {
   CELL_KIND, DIR_BIT, cssRgba, getLayout, getNames, type Cell, type LayoutResult,
@@ -122,6 +123,9 @@ export function CanvasViz(props: CanvasVizProps) {
         .filter((c) => labelable(c, mode))
         .slice(0, 400)
         .map((c) => c.id);
+      // Sunburst draws the root name in the center disc — make sure it
+      // resolves with the same batch (paint() re-fetches for the repaint).
+      if (mode === "sunburst") labelIds.push(res.meta.node);
       await getNames(generation, labelIds).catch(() => new Map<number, string>());
       if (disposed) return;
       setLayout(res);
@@ -162,12 +166,16 @@ export function CanvasViz(props: CanvasVizProps) {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.w, size.h);
-    // selection ring (user action)
+    // selection ring (user action): coral outer stroke + a refined thin
+    // white inner stroke (reference's selected-cell double-ring).
     const sel = props.selectedId != null ? cellsById.get(props.selectedId) : undefined;
     if (sel) {
       ctx.strokeStyle = "rgba(255,107,74,0.95)";
       ctx.lineWidth = 2.5;
       ringPath(ctx, sel, layout, mode);
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 1;
+      ringPath(ctx, sel, layout, mode, 3);
     }
     // hover ring (overlay canvas only — never React state)
     const hv = hoverCell.current;
@@ -301,7 +309,12 @@ function paint(canvas: HTMLCanvasElement, layout: LayoutResult, props: CanvasViz
   const cx = layout.meta.center?.[0] ?? w / 2;
   const cy = layout.meta.center?.[1] ?? h / 2;
 
-  void getNames(layout.meta.generation, layout.cells.filter((c) => labelable(c, mode)).slice(0, 400).map((c) => c.id)).then(
+  const labelIds = layout.cells
+    .filter((c) => labelable(c, mode))
+    .slice(0, 400)
+    .map((c) => c.id);
+  if (mode === "sunburst") labelIds.push(layout.meta.node);
+  void getNames(layout.meta.generation, labelIds).then(
     (names) => {
       // Names resolve async — repaint with them (still once per settle).
       drawCells(ctx, layout, props, names, w, h, cx, cy);
@@ -341,19 +354,23 @@ function drawCells(
   props: CanvasVizProps,
   names: Map<number, string>,
   w: number,
-  _h: number,
+  h: number,
   cx: number,
   cy: number,
 ): void {
   const mode = layout.meta.mode;
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--border").trim() || "#d8d8dd";
 
-  // mind-map: draw links first
+  // mind-map: draw links first — each takes the CHILD's own family color
+  // at ~45% opacity (reference: colored bezier links, not uniform gray).
   if (mode === "mind-map") {
     for (const c of layout.cells) {
       if ((c.flags & 0b111) !== CELL_KIND.DOT) continue;
       const [x, y, , px, py] = c.g;
-      ctx.strokeStyle = "rgba(140,140,150,0.45)";
+      const lr = (c.rgba >>> 24) & 0xff;
+      const lg = (c.rgba >>> 16) & 0xff;
+      const lb = (c.rgba >>> 8) & 0xff;
+      ctx.strokeStyle = `rgba(${lr},${lg},${lb},0.45)`;
       ctx.lineWidth = 1.8;
       ctx.beginPath();
       const mx = (x + px) / 2 + (y - py) * 0.12;
@@ -383,8 +400,15 @@ function drawCells(
       const [x, y, rw, rh] = c.g;
       ctx.fillStyle = fill;
       ctx.fillRect(x, y, rw, rh);
-      ctx.strokeStyle = "rgba(29,29,31,0.10)";
-      ctx.lineWidth = 1;
+      // Treemap: white gap separators between the pastel blocks (the
+      // reference's look); flame keeps the hairline dark stroke.
+      if (mode === "treemap") {
+        ctx.strokeStyle = "rgba(255,255,255,0.55)";
+        ctx.lineWidth = 1.5;
+      } else {
+        ctx.strokeStyle = "rgba(29,29,31,0.10)";
+        ctx.lineWidth = 1;
+      }
       ctx.strokeRect(x + 0.5, y + 0.5, rw - 1, rh - 1);
       if (rw >= 44 && rh >= 16) {
         const name = names.get(c.id);
@@ -452,7 +476,10 @@ function drawCells(
       ctx.strokeStyle = "rgba(29,29,31,0.16)";
       ctx.lineWidth = 1.2;
       ctx.stroke();
-      if (r >= 30) {
+      // The sunburst center disc carries the dedicated white center
+      // label below — skip the generic dark-ink circle label for it.
+      const isSunburstCenter = mode === "sunburst" && c.id === layout.meta.node;
+      if (r >= 30 && !isSunburstCenter) {
         const name = names.get(c.id);
         if (name) {
           const label = props.abbreviateLabels ? abbreviate(name) : name;
@@ -485,6 +512,33 @@ function drawCells(
         }
       }
     }
+  }
+
+  // Sunburst center label: the root folder name + total size in white,
+  // centered on the coral disc (reference's center treatment).
+  if (mode === "sunburst") {
+    let discR = NaN;
+    for (const c of layout.cells) {
+      if ((c.flags & 0b111) !== CELL_KIND.ARC) continue;
+      if (Number.isNaN(discR) || c.g[2] < discR) discR = c.g[2];
+    }
+    if (Number.isNaN(discR)) discR = Math.min(w, h) * 0.07;
+    const rootName = names.get(layout.meta.node);
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // White ink on coral: a soft dark shadow keeps it crisp without a
+    // heavy halo ring.
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = "#FFFFFF";
+    if (rootName) {
+      ctx.font = "600 11px " + uiFont();
+      ctx.fillText(clipLabel(ctx, rootName, discR * 1.7), cx, cy - 8);
+    }
+    ctx.font = "700 15px " + uiFont();
+    ctx.fillText(bytes(layout.meta.totalBytes), cx, cy + (rootName ? 7 : 0));
+    ctx.restore();
   }
 }
 
@@ -533,19 +587,35 @@ function hitCell(cells: Cell[], _mode: string, x: number, y: number, center: [nu
   return null;
 }
 
-/** Ring/outline path for selection + hover. */
-function ringPath(ctx: CanvasRenderingContext2D, c: Cell, layout: LayoutResult, _mode: string): void {
+/** Ring/outline path for selection + hover. `inset > 0` strokes an
+ *  inner variant (rect inset by `inset` px, circle r - inset, arc radii
+ *  pulled in by `inset`) — used for the white inner selection ring. */
+function ringPath(
+  ctx: CanvasRenderingContext2D,
+  c: Cell,
+  layout: LayoutResult,
+  _mode: string,
+  inset = 0,
+): void {
   const kind = c.flags & 0b111;
   ctx.beginPath();
   if (kind === CELL_KIND.RECT) {
-    ctx.rect(c.g[0] + 1, c.g[1] + 1, c.g[2] - 2, c.g[3] - 2);
+    const i = inset > 0 ? inset : 1;
+    if (c.g[2] - 2 * i > 1 && c.g[3] - 2 * i > 1) {
+      ctx.rect(c.g[0] + i, c.g[1] + i, c.g[2] - 2 * i, c.g[3] - 2 * i);
+    }
   } else if (kind === CELL_KIND.CIRCLE || kind === CELL_KIND.DOT) {
-    ctx.arc(c.g[0], c.g[1], c.g[2] + 1.5, 0, Math.PI * 2);
+    const r = inset > 0 ? c.g[2] - inset : c.g[2] + 1.5;
+    if (r > 0.5) ctx.arc(c.g[0], c.g[1], r, 0, Math.PI * 2);
   } else if (kind === CELL_KIND.ARC) {
     const [cx, cy] = layout.meta.center ?? [0, 0];
-    ctx.arc(cx, cy, c.g[3] + 1, c.g[0], c.g[1]);
-    ctx.arc(cx, cy, c.g[2] - 1, c.g[1], c.g[0], true);
-    ctx.closePath();
+    const ro = inset > 0 ? c.g[3] - inset : c.g[3] + 1;
+    const ri = inset > 0 ? c.g[2] + inset : c.g[2] - 1;
+    if (ro > ri && ri > 0.5) {
+      ctx.arc(cx, cy, ro, c.g[0], c.g[1]);
+      ctx.arc(cx, cy, ri, c.g[1], c.g[0], true);
+      ctx.closePath();
+    }
   }
   ctx.stroke();
 }

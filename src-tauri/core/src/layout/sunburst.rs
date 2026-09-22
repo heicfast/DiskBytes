@@ -7,12 +7,14 @@
 
 use crate::error::CoreError;
 use crate::layout::{
-    check_geometry, node_color, pack_rgba, Cell, ColorMode, LayoutBuffer, LayoutMeta, MAX_CELLS,
+    check_geometry, effective_branch_root, node_color, pack_rgba, Cell, ColorMode, LayoutBuffer,
+    LayoutMeta, MAX_CELLS,
 };
 use crate::scan::node::Tree;
 
-/// Center disc radius fraction of the smaller viewport side.
-const CENTER_R_FRACTION: f32 = 0.12;
+/// Center disc radius fraction of the smaller viewport side (reference:
+/// a larger coral center disc; the folder label is drawn JS-side).
+const CENTER_R_FRACTION: f32 = 0.16;
 /// Minimum arc span (radians) to emit a cell.
 const MIN_ARC: f32 = 0.004;
 /// Gap between rings and between sibling arcs (visual separation).
@@ -48,8 +50,12 @@ pub fn sunburst(
     };
     let mut cells: Vec<Cell> = Vec::with_capacity(512);
     let mut truncated = false;
-    // Center disc: the folder itself.
-    cells.push(Cell::circle(node, 0, pack_rgba(0x8E8E93), cx, cy, r_center));
+    // By-folder families attach at the effective branch root: descend
+    // single-sizeable-child chains ("This PC" → "C:") so C:'s children
+    // become the top-level branches (spec §7 color modes).
+    let branch_root = effective_branch_root(tree, node);
+    // Center disc: the folder itself, in brand coral (label drawn JS-side).
+    cells.push(Cell::circle(node, 0, pack_rgba(0xFF6B4A), cx, cy, r_center));
     if depth > 0 && total > 0 {
         let full = std::f32::consts::TAU;
         layout_ring(
@@ -66,6 +72,7 @@ pub fn sunburst(
             &mut cells,
             &mut truncated,
             0,
+            branch_root,
         );
     }
     Ok(LayoutBuffer {
@@ -88,7 +95,8 @@ pub fn sunburst(
 }
 
 /// Recursive ring layout: children of `node` inside the angular span
-/// `(a0..a1)` on ring at radius `r0`, width `ring_w`.
+/// `(a0..a1)` on ring at radius `r0`, width `ring_w`. `top_index` is the
+/// inherited by-folder family; `branch_root`'s children re-assign it.
 #[allow(clippy::too_many_arguments)]
 fn layout_ring(
     tree: &Tree,
@@ -104,6 +112,7 @@ fn layout_ring(
     cells: &mut Vec<Cell>,
     truncated: &mut bool,
     top_index: usize,
+    branch_root: u32,
 ) {
     if depth_left == 0 || ring_w <= 0.5 {
         return;
@@ -134,8 +143,11 @@ fn layout_ring(
         }
         let a0 = cursor;
         let a1 = cursor + arc;
+        // One pastel family per effective top-level branch, inherited by
+        // every descendant (shade still varies by depth + sibling index).
+        let fam = if node == branch_root { i } else { top_index };
         let rgba = pack_rgba(match color {
-            ColorMode::ByFolder => node_color(tree, id, color, now, i, depth_here as u16, i),
+            ColorMode::ByFolder => node_color(tree, id, color, now, fam, depth_here as u16, i),
             ColorMode::ByType => c.category().color(),
             ColorMode::ByAge => node_color(tree, id, color, now, 0, 0, i),
         });
@@ -162,7 +174,8 @@ fn layout_ring(
                 now,
                 cells,
                 truncated,
-                if depth_here == 1 { i } else { top_index },
+                fam,
+                branch_root,
             );
         }
         cursor = a1 + gap;
@@ -240,5 +253,73 @@ mod tests {
     fn invalid_geometry_rejected() {
         let t = build();
         assert!(sunburst(&t, 0, 0.0, 100.0, 3, ColorMode::ByType, 1).is_err());
+    }
+
+    /// "This PC" → single "C:" drive → 6 folders with distinct sizes
+    /// (each holding one file) — the single-child-root shape that used to
+    /// collapse by-folder coloring.
+    fn build_single_drive() -> Tree {
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "This PC");
+        t.append_batch(0, vec![dir("C:")]); // id 1
+        t.append_batch(
+            1,
+            vec![
+                dir("Users"),    // 2
+                dir("Windows"),  // 3
+                dir("Programs"), // 4
+                dir("Data"),     // 5
+                dir("Temp"),     // 6
+                dir("Logs"),     // 7
+            ],
+        );
+        for (id, size) in [
+            (2u32, 600u64),
+            (3, 500),
+            (4, 400),
+            (5, 300),
+            (6, 200),
+            (7, 100),
+        ] {
+            t.append_batch(id, vec![file("f.bin", size, size, 1)]);
+        }
+        rollup::finalize(&mut t);
+        t
+    }
+
+    #[test]
+    fn single_child_root_assigns_branch_families_and_coral_center() {
+        let t = build_single_drive();
+        let buf = sunburst(&t, 0, 800.0, 800.0, 3, ColorMode::ByFolder, 1).unwrap();
+        // Center disc: brand coral, enlarged to the 0.16 radius fraction.
+        assert_eq!(buf.cells[0].rgba, 0xFF6B4AFF, "center must be brand coral");
+        let expected_r = (800.0f32 / 2.0 - 4.0) * CENTER_R_FRACTION;
+        assert!(
+            (buf.cells[0].g[2] - expected_r).abs() < 0.01,
+            "center radius {} vs expected {expected_r}",
+            buf.cells[0].g[2]
+        );
+        let distinct = |depth: u16| {
+            let mut v: Vec<u32> = buf
+                .cells
+                .iter()
+                .filter(|c| c.flags == crate::layout::cell_kind::ARC && c.depth == depth)
+                .map(|c| c.rgba)
+                .collect();
+            v.sort_unstable();
+            v.dedup();
+            v.len()
+        };
+        // Ring 2 = C:'s children (the effective top-level branches): they
+        // must span distinct pastel families, not one inherited family.
+        assert!(
+            distinct(2) >= 3,
+            "branch arcs must span >= 3 pastel families"
+        );
+        // Ring 3 (files inside the branches) inherits the branch families.
+        assert!(
+            distinct(3) >= 3,
+            "descendant arcs must inherit their branch families"
+        );
     }
 }

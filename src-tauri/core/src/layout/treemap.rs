@@ -11,8 +11,8 @@
 
 use crate::error::CoreError;
 use crate::layout::{
-    check_geometry, node_color, pack_rgba, rect_visible, Cell, ColorMode, GroupDesc, GroupTuple,
-    LayoutBuffer, LayoutMeta, MAX_CELLS,
+    check_geometry, depth_below, effective_branch_root, node_color, pack_rgba, rect_visible, Cell,
+    ColorMode, GroupDesc, GroupTuple, LayoutBuffer, LayoutMeta, MAX_CELLS,
 };
 use crate::scan::node::Tree;
 
@@ -63,6 +63,10 @@ pub fn treemap(
         w: width,
         h: height,
     };
+    // By-folder families attach at the effective branch root: descend
+    // single-sizeable-child chains ("This PC" → "C:") so C:'s children
+    // become the top-level branches (spec §7 color modes).
+    let branch_root = effective_branch_root(tree, node);
     layout_children(
         tree,
         node,
@@ -71,6 +75,8 @@ pub fn treemap(
         color,
         now,
         node,
+        branch_root,
+        0,
         &mut cells,
         &mut truncated,
     );
@@ -93,7 +99,8 @@ pub fn treemap(
     })
 }
 
-/// Recurse into `parent`'s children inside `rect`.
+/// Recurse into `parent`'s children inside `rect`. `family` is the
+/// inherited by-folder family; `branch_root`'s children re-assign it.
 #[allow(clippy::too_many_arguments)]
 fn layout_children(
     tree: &Tree,
@@ -103,6 +110,8 @@ fn layout_children(
     color: ColorMode,
     now: i64,
     layout_root: u32,
+    branch_root: u32,
+    family: usize,
     cells: &mut Vec<Cell>,
     truncated: &mut bool,
 ) {
@@ -121,7 +130,7 @@ fn layout_children(
         .map(|&id| tree.node(id).map_or(0, |n| n.on_disk))
         .collect();
     let rects = squarify(&sizes, rect);
-    let depth_here = depth_from_root(tree, parent, layout_root) + 1;
+    let depth_here = depth_below(tree, parent, layout_root) + 1;
     for (i, (&id, r)) in ids.iter().zip(rects.iter()).enumerate() {
         if cells.len() >= MAX_CELLS {
             *truncated = true;
@@ -131,8 +140,11 @@ fn layout_children(
         if node.is_removed() {
             continue;
         }
+        // One pastel family per effective top-level branch, inherited by
+        // every descendant (shade still varies by depth + sibling index).
+        let fam = if parent == branch_root { i } else { family };
         let rgba = pack_rgba(match color {
-            ColorMode::ByFolder => node_color(tree, id, color, now, i, depth_here as u16, i),
+            ColorMode::ByFolder => node_color(tree, id, color, now, fam, depth_here as u16, i),
             ColorMode::ByType => node.category().color(),
             ColorMode::ByAge => node_color(tree, id, color, now, 0, 0, i),
         });
@@ -173,6 +185,8 @@ fn layout_children(
                     color,
                     now,
                     layout_root,
+                    branch_root,
+                    fam,
                     cells,
                     truncated,
                 );
@@ -191,21 +205,6 @@ fn layout_children(
             cells.push(Cell::rect(id, depth_here as u16, rgba, r.x, r.y, r.w, r.h));
         }
     }
-}
-
-/// Depth of `node` relative to `layout_root` (walks parents; ids shrink).
-fn depth_from_root(tree: &Tree, node: u32, layout_root: u32) -> u32 {
-    let mut d = 0u32;
-    let mut cur = node;
-    while cur != layout_root {
-        let p = tree.node(cur).map_or(u32::MAX, |n| n.parent);
-        if p == u32::MAX {
-            break;
-        }
-        cur = p;
-        d += 1;
-    }
-    d
 }
 
 /// The core squarified strip algorithm. Input sizes MUST be sorted
@@ -632,5 +631,79 @@ mod tests {
             }
         )
         .is_empty());
+    }
+
+    /// "This PC" → single "C:" drive → 6 folders with distinct sizes
+    /// (each holding one file) — the single-child-root shape that used to
+    /// collapse the whole map into one pastel family / re-assign families
+    /// per level instead of one family per top-level branch.
+    fn build_single_drive_tree() -> Tree {
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "This PC");
+        t.append_batch(0, vec![dir("C:")]); // id 1
+        t.append_batch(
+            1,
+            vec![
+                dir("Users"),       // 2
+                dir("Windows"),     // 3
+                dir("Programs"),    // 4
+                dir("ProgramData"), // 5
+                dir("Temp"),        // 6
+                dir("Logs"),        // 7
+            ],
+        );
+        for (id, size) in [
+            (2u32, 600u64),
+            (3, 500),
+            (4, 400),
+            (5, 300),
+            (6, 200),
+            (7, 100),
+        ] {
+            t.append_batch(id, vec![file("f.bin", size, size, 1)]);
+        }
+        rollup::finalize(&mut t);
+        t
+    }
+
+    #[test]
+    fn effective_branch_root_descends_single_child_chains() {
+        // A root that already branches is its own branch root.
+        let t = build_tree();
+        assert_eq!(effective_branch_root(&t, 0), 0);
+        // "This PC" → "C:" (single sizeable child) → 6 folders: the
+        // branch root is C:, so families attach at C:'s children.
+        let d = build_single_drive_tree();
+        assert_eq!(effective_branch_root(&d, 0), 1);
+    }
+
+    #[test]
+    fn treemap_single_child_root_assigns_branch_families() {
+        let t = build_single_drive_tree();
+        let buf = treemap(&t, 0, 1600.0, 1000.0, 4, ColorMode::ByFolder, 1).unwrap();
+        let distinct = |depth: u16| {
+            let mut v: Vec<u32> = buf
+                .cells
+                .iter()
+                .filter(|c| c.depth == depth)
+                .map(|c| c.rgba)
+                .collect();
+            v.sort_unstable();
+            v.dedup();
+            v.len()
+        };
+        // Depth-2 cells = C:'s children (the effective top-level branches):
+        // they must span distinct pastel families, not one inherited family.
+        assert!(
+            distinct(2) >= 3,
+            "branch cells must span >= 3 pastel families"
+        );
+        // Depth-3 cells (files inside the branches) INHERIT their branch's
+        // family — the old per-level re-assignment collapsed them onto
+        // sibling indices instead of keeping branch cohesion.
+        assert!(
+            distinct(3) >= 3,
+            "descendants must inherit their branch families"
+        );
     }
 }

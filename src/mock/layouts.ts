@@ -19,7 +19,9 @@ export interface MockCell {
   g: [number, number, number, number, number];
 }
 
-const TONE_BASE = [0xcfe0f7, 0xcdf0e6, 0xe3d8f5, 0xf9ecc3, 0xf9dde1, 0xd4efc9, 0xd9ecf9, 0xe6e8ea];
+/** Pastel families (parity with core `folder_family_color`): blue, teal,
+ *  violet, amber, rose, green, sky, slate. */
+const TONE_BASE = [0x93c5fd, 0x99f6e4, 0xc4b5fd, 0xfde69a, 0xfdcdd3, 0xbbf7d0, 0xbae6fd, 0xcbd5e1];
 const AGE_COLORS = [0x34d399, 0x60a5fa, 0x818cf8, 0xa78bfa, 0xf472b6, 0xf87171];
 
 const DIR_BIT = 1 << 3;
@@ -46,15 +48,25 @@ function ageBucket(modified: number, now: number): number {
   return 5;
 }
 
-function colorFor(node: MockNode, idx: number, depth: number, mode: string, now: number): number {
+function colorFor(
+  node: MockNode,
+  family: number,
+  depth: number,
+  mode: string,
+  now: number,
+  sibling = 0,
+): number {
   if (mode === "by-type") {
     return shade(CATEGORY_COLORS[node.isDir ? 8 : node.category], 1);
   }
   if (mode === "by-age") {
     return AGE_COLORS[ageBucket(node.modified, now)];
   }
-  const base = TONE_BASE[idx % TONE_BASE.length];
-  return shade(base, Math.max(0.74, 1 - depth * 0.055));
+  const base = TONE_BASE[family % TONE_BASE.length];
+  // Shade varies by depth + sibling parity (mirrors core
+  // `folder_family_color`: neighbors separate, staying pastel).
+  const f = Math.max(0.7, 1 - Math.min(depth, 4) * 0.06 - (sibling % 2 === 1 ? 0.05 : 0));
+  return shade(base, f);
 }
 
 interface Item {
@@ -69,6 +81,69 @@ function childrenSorted(tree: MockTree, id: number): Item[] {
     .sort((a, b) => b.v - a.v);
 }
 
+/** Strictly sizeable children (onDisk||logical > 0), size-desc. */
+function sizeableSorted(tree: MockTree, id: number): Item[] {
+  return tree.nodes[id].children
+    .map((c) => ({ node: c, v: tree.nodes[c].onDisk || tree.nodes[c].logical }))
+    .filter((k) => k.v > 0)
+    .sort((a, b) => b.v - a.v);
+}
+
+/**
+ * The node where by-folder families assign (mirrors the Rust engines'
+ * effective branch root): descend while the node has exactly ONE
+ * sizeable child that is a dir with children (This PC → C:), so families
+ * start at the first real branching level.
+ */
+function effectiveBranchRoot(tree: MockTree, rootId: number): number {
+  let cur = rootId;
+  for (let guard = 0; guard < 64; guard++) {
+    const n = tree.nodes[cur];
+    if (!n || !n.isDir) return cur;
+    const sizeable = n.children.filter((c) => {
+      const k = tree.nodes[c];
+      return k !== undefined && (k.onDisk > 0 || k.logical > 0);
+    });
+    if (sizeable.length !== 1) return cur;
+    const only = tree.nodes[sizeable[0]];
+    if (!only.isDir || only.children.length === 0) return cur;
+    cur = sizeable[0];
+  }
+  return cur;
+}
+
+/**
+ * node id → by-folder family index: families assign at the sizeable
+ * children of the effective branch root (index among them, size desc);
+ * every descendant inherits its branch's family. The single-child chain
+ * above the branch root carries the dominant family so container strips
+ * blend with their content.
+ */
+function buildFamilies(tree: MockTree, rootId: number, branchRoot: number): Map<number, number> {
+  const fam = new Map<number, number>();
+  const kids = sizeableSorted(tree, branchRoot);
+  kids.forEach((k, i) => {
+    const f = i % TONE_BASE.length;
+    const stack = [k.node];
+    while (stack.length > 0) {
+      const id = stack.pop() as number;
+      fam.set(id, f);
+      const ch = tree.nodes[id].children;
+      for (let j = 0; j < ch.length; j++) stack.push(ch[j]);
+    }
+  });
+  const leadFam = kids.length > 0 ? (fam.get(kids[0].node) ?? 0) : 0;
+  let cur = rootId;
+  while (cur >= 0 && cur !== branchRoot) {
+    fam.set(cur, leadFam);
+    const p = tree.nodes[cur].parent;
+    if (p === undefined) break;
+    cur = p;
+  }
+  fam.set(branchRoot, leadFam);
+  return fam;
+}
+
 /** Squarified treemap (Bruls et al.) — recursive on folders. */
 function squarify(
   values: Item[],
@@ -77,7 +152,7 @@ function squarify(
   tree: MockTree,
   depth: number,
   maxDepth: number,
-  _toneIdx: number,
+  fam: Map<number, number>,
   colorMode: string,
   now: number,
 ): void {
@@ -120,16 +195,16 @@ function squarify(
       const r: [number, number, number, number] = horizontal
         ? [cx, cy + off, rowLen, cLen]
         : [cx + off, cy, cLen, rowLen];
-      // By-folder family: top-level cells take their index within the
-      // parent; deeper cells INHERIT the family (spec: one pastel family
-      // per top-level branch, shade varies by depth + index).
-      const idx = depth === 0 ? values.indexOf(c) % TONE_BASE.length : _toneIdx;
+      // By-folder family: assigned at the effective branch root's
+      // children, inherited by descendants; shade varies by depth +
+      // sibling index (spec: one pastel family per top-level branch).
       if (r[2] >= 6 && r[3] >= 6) {
         out.push({
           id: c.node,
           depth,
           flags: (n.isDir ? DIR_BIT : 0) | KIND_RECT,
-          rgba: (colorFor(n, idx, depth, colorMode, now) << 8) | 0xff,
+          rgba:
+            (colorFor(n, fam.get(c.node) ?? 0, depth, colorMode, now, values.indexOf(c)) << 8) | 0xff,
           g: [r[0], r[1], r[2], r[3], 0],
         });
       }
@@ -142,7 +217,7 @@ function squarify(
           tree,
           depth + 1,
           maxDepth,
-          idx,
+          fam,
           colorMode,
           now,
         );
@@ -169,13 +244,27 @@ export function buildLayout(
   const root = tree.nodes[rootId];
   const total = root.onDisk || root.logical || 1;
   const kids = childrenSorted(tree, rootId);
+  // By-folder families: one pastel family per branch under the effective
+  // branch root (mirrors the Rust engines' effective_branch_root).
+  const branchRoot = effectiveBranchRoot(tree, rootId);
+  const fam = buildFamilies(tree, rootId, branchRoot);
+  const famOf = (id: number): number => fam.get(id) ?? 0;
 
   if (mode === "treemap") {
-    squarify(kids, [0, 0, width, height], cells, tree, 0, depth, 0, colorMode, now);
+    squarify(kids, [0, 0, width, height], cells, tree, 0, depth, fam, colorMode, now);
   } else if (mode === "sunburst") {
     const rMax = Math.min(width, height) / 2 - 6;
-    const r0 = rMax * 0.2;
+    const r0 = rMax * 0.16;
     const ringGap = 1.2;
+    // Center disc (matches the Rust engine): coral; the JS layer draws
+    // the root name + total size centered on it.
+    cells.push({
+      id: rootId,
+      depth: 0,
+      flags: KIND_CIRCLE,
+      rgba: 0xff6b4abb,
+      g: [width / 2, height / 2, r0, 0, 0],
+    });
     const ring = (
       items: Item[],
       rIn: number,
@@ -183,12 +272,12 @@ export function buildLayout(
       a0: number,
       a1: number,
       d: number,
-      toneIdx: number,
     ): void => {
       const sum = items.reduce((a, b) => a + b.v, 0);
       if (sum <= 0 || rOut - rIn < 2) return;
       let a = a0;
-      for (const it of items) {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
         const span = (it.v / sum) * (a1 - a0);
         if (span > 0.006 && cells.length < MAX_CELLS) {
           const n = tree.nodes[it.node];
@@ -196,7 +285,7 @@ export function buildLayout(
             id: it.node,
             depth: d,
             flags: (n.isDir ? DIR_BIT : 0) | KIND_ARC,
-            rgba: (colorFor(n, toneIdx, d, colorMode, now) << 8) | 0xff,
+            rgba: (colorFor(n, famOf(it.node), d, colorMode, now, i) << 8) | 0xff,
             g: [a + 0.0012, a + span - 0.0012, rIn, rOut, 0],
           });
           if (n.isDir && d < depth - 1) {
@@ -207,40 +296,40 @@ export function buildLayout(
               a,
               a + span,
               d + 1,
-              toneIdx,
             );
           }
         }
         a += span;
       }
     };
-    ring(kids, r0, rMax * 0.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2, 0, 0);
+    ring(kids, r0 + ringGap, rMax * 0.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2, 0);
   } else if (mode === "flame") {
     const rowH = Math.min(88, (height - 6) / Math.max(3, Math.min(depth, 6)));
-    const rows: { item: Item; a0: number; a1: number; tone: number; d: number }[] = [];
-    const layout = (items: Item[], a0: number, a1: number, d: number, toneIdx: number): void => {
+    const rows: { item: Item; a0: number; a1: number; sib: number; d: number }[] = [];
+    const layout = (items: Item[], a0: number, a1: number, d: number): void => {
       const sum = items.reduce((a, b) => a + b.v, 0);
       if (sum <= 0 || d >= Math.min(depth, 6)) return;
       let a = a0;
-      for (const it of items) {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
         const span = (it.v / sum) * (a1 - a0);
         if (span * width > 1.5) {
-          rows.push({ item: it, a0: a, a1: a + span, tone: toneIdx, d });
+          rows.push({ item: it, a0: a, a1: a + span, sib: i, d });
           if (tree.nodes[it.node].isDir) {
-            layout(childrenSorted(tree, it.node), a, a + span, d + 1, toneIdx);
+            layout(childrenSorted(tree, it.node), a, a + span, d + 1);
           }
         }
         a += span;
       }
     };
-    layout(kids, 0, 1, 0, 0);
+    layout(kids, 0, 1, 0);
     for (const r of rows.slice(0, MAX_CELLS)) {
       const n = tree.nodes[r.item.node];
       cells.push({
         id: r.item.node,
         depth: r.d,
         flags: (n.isDir ? DIR_BIT : 0) | KIND_RECT,
-        rgba: (colorFor(n, r.tone, r.d, colorMode, now) << 8) | 0xff,
+        rgba: (colorFor(n, famOf(r.item.node), r.d, colorMode, now, r.sib) << 8) | 0xff,
         g: [r.a0 * width + 1, r.d * rowH + 1, Math.max(1, r.a1 * width - r.a0 * width - 2), rowH - 2.5, 0],
       });
     }
@@ -261,13 +350,14 @@ export function buildLayout(
         id: k.node,
         depth: 1,
         flags: (n.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
-        rgba: (colorFor(n, i, 1, colorMode, now) << 8) | 0xb4,
+        rgba: (colorFor(n, famOf(k.node), 1, colorMode, now, i) << 8) | 0xb4,
         g: [x, y, rr, 0, 0],
       });
       if (n.isDir && depth > 1) {
         const sub = childrenSorted(tree, k.node).slice(0, 14);
         const ssum = sub.reduce((a, b) => a + Math.sqrt(b.v), 0) || 1;
         let sa = 0;
+        let sj = 0;
         for (const s of sub) {
           const sr = Math.max(2.5, (Math.sqrt(s.v) / ssum) * rr * 0.62);
           const sd = rr - sr - 1.5;
@@ -276,10 +366,11 @@ export function buildLayout(
             id: s.node,
             depth: 2,
             flags: (sn.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
-            rgba: (colorFor(sn, i, 2, colorMode, now) << 8) | 0xd9,
+            rgba: (colorFor(sn, famOf(s.node), 2, colorMode, now, sj) << 8) | 0xd9,
             g: [x + Math.cos(sa) * sd, y + Math.sin(sa) * sd, sr, 0, 0],
           });
           sa += 0.55;
+          sj += 1;
         }
       }
       ang += Math.max(0.42, (Math.sqrt(k.v) / sqrtSum) * 6.4);
@@ -301,13 +392,14 @@ export function buildLayout(
         id: k.node,
         depth: 1,
         flags: (n.isDir ? DIR_BIT : 0) | KIND_DOT,
-        rgba: (colorFor(n, i, 1, colorMode, now) << 8) | 0xff,
+        rgba: (colorFor(n, famOf(k.node), 1, colorMode, now, i) << 8) | 0xff,
         g: [x, y, rr, cx, cy],
       });
       if (n.isDir && depth > 1) {
         const sub = childrenSorted(tree, k.node).slice(0, 8);
         const ssum = sub.reduce((a, b) => a + b.v, 0) || 1;
         let sa = ang - 0.66;
+        let sj = 0;
         for (const s of sub) {
           const sr = Math.max(3.5, Math.sqrt(s.v / ssum) * rr * 0.44);
           const sd = rr + sr + 14;
@@ -316,10 +408,11 @@ export function buildLayout(
             id: s.node,
             depth: 2,
             flags: (sn.isDir ? DIR_BIT : 0) | KIND_DOT,
-            rgba: (colorFor(sn, i, 2, colorMode, now) << 8) | 0xcc,
+            rgba: (colorFor(sn, famOf(s.node), 2, colorMode, now, sj) << 8) | 0xcc,
             g: [x + Math.cos(sa) * sd, y + Math.sin(sa) * sd, sr, x, y],
           });
           sa += 0.27;
+          sj += 1;
         }
       }
     }
@@ -327,10 +420,13 @@ export function buildLayout(
 
   const truncated = cells.length > MAX_CELLS;
   const finalCells = truncated ? cells.slice(0, MAX_CELLS) : cells;
-  const groups = kids.slice(0, 8).map((k, i) => ({
+  // Legend groups mirror the family level (children of the effective
+  // branch root) so the chips match the colors on the canvas.
+  const branchKids = sizeableSorted(tree, branchRoot);
+  const groups = branchKids.slice(0, 8).map((k, i) => ({
     id: 0xffff0000 + i,
     name: tree.nodes[k.node].name,
-    color: colorFor(tree.nodes[k.node], i, 0, colorMode, now),
+    color: colorFor(tree.nodes[k.node], famOf(k.node), 0, colorMode, now, 0),
     size: k.v,
   }));
 

@@ -290,6 +290,62 @@ pub fn node_color(
     }
 }
 
+/// Descend from `root` through single-sizeable-child chains to the first
+/// node whose sizeable children actually branch (≥ 2). Its children form
+/// the effective top-level branches for by-folder family coloring (e.g.
+/// "This PC" → "C:" → {Users, Windows, …} assigns families at C:'s children).
+///
+/// Returns `root` unchanged when it already branches (or cannot descend
+/// further), so a normal multi-folder scan keeps assigning families at the
+/// layout root's own children. The iteration cap only guards pathological
+/// arenas — parent ids always precede child ids, so chains cannot cycle.
+#[must_use]
+pub fn effective_branch_root(tree: &Tree, root: u32) -> u32 {
+    let mut cur = root;
+    for _ in 0..64 {
+        // Count sizeable (on-disk > 0) children; remember the only one.
+        let mut sizeable = 0usize;
+        let mut only = cur;
+        for &id in tree.children_sorted(cur) {
+            if tree.node(id).map_or(0, |n| n.on_disk) > 0 {
+                sizeable += 1;
+                only = id;
+                if sizeable > 1 {
+                    break; // already branching — no descent needed
+                }
+            }
+        }
+        if sizeable != 1 {
+            return cur;
+        }
+        let descend = tree
+            .node(only)
+            .is_some_and(|n| n.is_dir() && n.child_count > 0);
+        if !descend {
+            return cur;
+        }
+        cur = only;
+    }
+    cur
+}
+
+/// Depth of `node` below `root` (0 when equal). Walks parents; arena ids
+/// always shrink toward the root, so the walk terminates. Used to locate
+/// the effective branch level for the tiered bubble/mind-map alpha.
+pub(crate) fn depth_below(tree: &Tree, node: u32, root: u32) -> u32 {
+    let mut d = 0u32;
+    let mut cur = node;
+    while cur != root {
+        let p = tree.node(cur).map_or(u32::MAX, |n| n.parent);
+        if p == u32::MAX {
+            break;
+        }
+        cur = p;
+        d += 1;
+    }
+    d
+}
+
 /// Validate geometry before layout math (doc 04 §4 "assert bounds early").
 pub(crate) fn check_geometry(width: f32, height: f32) -> Result<(), CoreError> {
     if width <= 0.0 || height <= 0.0 || !width.is_finite() || !height.is_finite() {
