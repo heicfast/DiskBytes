@@ -371,3 +371,24 @@ Stage Summary:
 - All 5 visualization algorithms audited; 4 fixed at root cause in BOTH the Rust engines (production) and the mock (dev parity); CanvasViz label gates + clamping hardened
 - VLM-verified: bubbles 9/10, flame solid clusters + clear hierarchy, mind-map zero clipping (pixel-verified)
 - Next: T14-T17 (line-by-line review, state-change immediacy, popup/dialog polish), responsive re-audit, commit round 14, push + CI verify
+
+---
+Task ID: 16
+Agent: main (Super Z)
+Task: Wave 4 (cont.) — round-15 CI verification + new-batch audits (N1-N17): light-mode regression, tab flows, toast system, keyboard/focus, dead CSS, sub-minimum window bug found in real CI frames
+
+Work Log:
+- ROUND 15 (7dca594) UI-Screenshots: SUCCESS, app-stderr 0 bytes (zero panics); CI + macOS still running at audit time
+- REAL-BUILD VERIFICATION from the 26-frame tour: the window is WINDOWED (taskbar + desktop visible — the fullscreen complaint fixed in production); new pictograms, dark folder-card tints all present
+- CRITICAL BUG FOUND IN CI FRAMES: the content h1 rendered as "DiskB" (mid-character clip, no ellipsis) — pixel-measured the app window at 952px on the 1024×768 runner display. Root cause: programmatic set_size does NOT enforce the configured min sizes (those gate user resizes only) — the 86% work-area clamp produced a sub-1280 window and the layout squeezed. FIXED: explicit MIN_WINDOW_W/H floor (1280×760) in fit_window_to_work_area — on screens smaller than the floor the window exceeds the screen (standard min-size app behavior) instead of breaking the layout
+- DISCOVERY: every HISTORICAL CI frame was cropped at the 1024 runner display (old 1680 window) — the inspector panel was never visible in any tour capture. FIXED: ui-screenshots.yml now bumps the runner display to 1920×1080 (Set-DisplayResolution, non-fatal fallback) so future tours capture the complete app
+- TOAST SYSTEM (UX gap: cleanup commit closed the popover with zero feedback): event-based toast bus (db-toast window event, 5.2s auto-dismiss, icon select shield/trash/check); commit success now confirms "Moved N items · X GB to the Recycle Bin — empty it to free the space"; elevation-decline toast migrated to the same bus
+- Audits (all VLM/light-mode): light folder-cards + rank bars CLEAN (pastel design preserved); Monitor 9/10, Duplicates 9/10, Snapshots 9/10, Applications 9/10 (light); keyboard Tab-order + 2px coral focus ring verified; Esc closes popovers; theme 4× toggle crossfade error-free; responsive 1280-1920 zero overflow + 1280 VLM-verified CLEAN
+- Dead CSS: .db-fade-up utility class removed (keyframes kept — 4 component rules reference them); .db-mid-ellipsis confirmed already gone; 27 other candidates were false positives (dynamically constructed class names)
+- App.tsx: dead get_status IPC call removed from the scan-done effect
+- VLM false positives triaged this round: dark-treemap "saturated pastels FAIL" (the pastel canvas is the established reference language — round-7 dark audit + zoom audits verified it intentional); sunburst center "Disk…" (designed clipLabel ellipsis); "DiskI" breadcrumb (sub-min squeeze artifact)
+
+Stage Summary:
+- Round 16 ready: min-window floor + CI 1920×1080 captures + toast bus + dead-code cleanup
+- All gates green: tsc 0, vitest 39/39, build OK, mock-free, fmt/clippy clean
+- The CI loop is now STRONGER than ever (full-window captures); next push verifies the min-clamp + 1920 tour

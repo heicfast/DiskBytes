@@ -28,7 +28,7 @@ import { invoke } from "./lib/ipc";
 import { pushRecent } from "./sidebar/RecentSection";
 import { TourDriver } from "./shell/TourDriver";
 import { AppErrorBoundary } from "./shell/AppErrorBoundary";
-import { ShieldIcon } from "./components/Icon";
+import { CheckIcon, ShieldIcon, Trash2Icon } from "./components/Icon";
 import { listen } from "./lib/ipc";
 import "./theme/tokens.css";
 import "./styles/base.css";
@@ -58,6 +58,7 @@ function AppShell() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastIcon, setToastIcon] = useState<"shield" | "trash" | "check">("shield");
 
   useEffect(() => {
     attachLicenseEvents();
@@ -65,22 +66,43 @@ function AppShell() {
     useScanStore.getState().ensureListeners(); // scan-progress / scan-done / cleanup-committed (once)
   }, []);
 
+  // Toast bus: any surface can raise a transient toast via the
+  // `db-toast` window event (detail: { text, icon? }). The elevation
+  // decline listener below and the cleanup commit both use it.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const showToast = (text: string, icon?: string) => {
+      setToast(text);
+      if (icon === "shield" || icon === "trash" || icon === "check") setToastIcon(icon);
+      else setToastIcon("check");
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setToast(null), 5200);
+    };
+    const onToast = (e: Event) => {
+      const detail = (e as CustomEvent<{ text: string; icon?: string }>).detail;
+      if (detail?.text) showToast(detail.text, detail.icon);
+    };
+    window.addEventListener("db-toast", onToast);
+    return () => {
+      window.removeEventListener("db-toast", onToast);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
   // Elevation decline feedback: the Rust side emits `admin-restart-failed`
   // when the UAC prompt is declined or the elevated launch fails — surface
   // it as a transient toast so the click is never silently swallowed.
   useEffect(() => {
     let un: (() => void) | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     void listen<string>("admin-restart-failed", (reason) => {
-      setToast(reason || "Elevation was declined — administrator restart failed.");
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setToast(null), 5200);
+      window.dispatchEvent(
+        new CustomEvent("db-toast", { detail: { text: reason || "Elevation was declined — administrator restart failed.", icon: "shield" } }),
+      );
     }).then((u) => {
       un = u;
     }).catch(() => undefined);
     return () => {
       un?.();
-      if (timer) clearTimeout(timer);
     };
   }, []);
 
@@ -206,7 +228,7 @@ function AppShell() {
       <LicenseDialog open={licenseOpen} onClose={() => setLicenseOpen(false)} />
       {toast && (
         <div className="db-toast" role="status">
-          <ShieldIcon size={15} />
+          {toastIcon === "trash" ? <Trash2Icon size={15} /> : toastIcon === "shield" ? <ShieldIcon size={15} /> : <CheckIcon size={15} />}
           {toast}
         </div>
       )}

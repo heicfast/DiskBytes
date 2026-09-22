@@ -77,6 +77,7 @@ export function CleanupQueuePopover({
   const doCommit = async () => {
     setCommitting(true);
     setFailure(null);
+    const committingItems = items;
     try {
       const result = await commit();
       const failed = result.failed;
@@ -85,6 +86,21 @@ export function CleanupQueuePopover({
       } else {
         setConfirming(false);
         onClose();
+        // Success feedback: the popover closing over an updated tree is
+        // too quiet for a destructive-feeling action — confirm WHAT
+        // moved and remind that emptying the bin frees the space.
+        const moved = result.trashed.length;
+        const freed = committingItems
+          .filter((i) => result.trashed.some((t) => t.path === i.path))
+          .reduce((a, i) => a + i.size, 0);
+        window.dispatchEvent(
+          new CustomEvent("db-toast", {
+            detail: {
+              text: `Moved ${moved.toLocaleString()} item${moved === 1 ? "" : "s"} · ${bytes(freed)} to the ${BIN_NAME} — empty it to free the space.`,
+              icon: "trash",
+            },
+          }),
+        );
       }
     } catch (e) {
       setFailure({ count: 0, failed: [], error: String(e) });

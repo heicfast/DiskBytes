@@ -179,9 +179,8 @@ kbd {
     transform: none;
   }
 }
-.db-fade-up {
-  animation: db-fade-up var(--fade) ease both;
-}
+/* (The `.db-fade-up` utility class was unused — the @keyframes above
+ * stay: four component rules reference them directly.) */
 
 @media (forced-colors: active) {
   button:focus-visible,

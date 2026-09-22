@@ -31,6 +31,16 @@ use tauri::Manager;
 const DEFAULT_WINDOW_W: f64 = 1440.0;
 const DEFAULT_WINDOW_H: f64 = 860.0;
 
+/// The design floor (matches `minWidth`/`minHeight` in tauri.conf.json).
+/// IMPORTANT: programmatic `set_size` does NOT enforce the configured
+/// minimums (those gate user resizes) — on a 1024×768 CI runner the
+/// 86% clamp produced a 880px window and the sub-minimum layout
+/// squeezed the content header to "DiskB". Clamp up explicitly: on
+/// screens smaller than the floor the window simply exceeds the
+/// screen (standard min-size app behavior) instead of breaking.
+const MIN_WINDOW_W: f64 = 1280.0;
+const MIN_WINDOW_H: f64 = 760.0;
+
 /// Never cover more than this fraction of the work area on either
 /// axis — the desktop must stay visible around the app (user-reported
 /// issue: the old 1680×1050 default clamped to the work area on
@@ -58,9 +68,12 @@ fn fit_window_to_work_area(app: &tauri::App) {
         let area_w = f64::from(area.size.width) / scale;
         let area_h = f64::from(area.size.height) / scale;
         if area_w > 100.0 && area_h > 100.0 {
-            let w = DEFAULT_WINDOW_W.min((area_w * WORK_AREA_FRACTION).floor());
-            let h = DEFAULT_WINDOW_H.min((area_h * WORK_AREA_FRACTION).floor());
-            // set_size clamps to the configured min size on its own.
+            let w = DEFAULT_WINDOW_W
+                .min((area_w * WORK_AREA_FRACTION).floor())
+                .max(MIN_WINDOW_W);
+            let h = DEFAULT_WINDOW_H
+                .min((area_h * WORK_AREA_FRACTION).floor())
+                .max(MIN_WINDOW_H);
             let _ = window.set_size(tauri::LogicalSize::new(w, h));
             let _ = window.center();
         }
