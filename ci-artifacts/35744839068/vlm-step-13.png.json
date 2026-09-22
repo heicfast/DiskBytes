@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Applications scanning/analysis view with active progress indicator.\n(2) QUALITY: PASS. UI renders correctly, colors are distinct, and layout is stable.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790090121,
+  "id": "20260922231519b39e7409cfd24b0e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922231519b39e7409cfd24b0e",
+  "usage": {
+    "completion_tokens": 37,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1112
+  }
+}

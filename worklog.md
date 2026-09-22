@@ -203,3 +203,20 @@ Stage Summary:
 - 9 of 10 rounds fully green end-to-end (round-8 clippy blip fixed in round 9); every user-reported issue now fixed, verified locally AND on real Windows CI
 - Round 10 ready to push: Age Map in-cell labels
 - Next: push round 10 → verify, then continue the long loop (remaining polish: storage-card cohesion micro-tuning if VLM flags it again, more edge-state coverage)
+
+---
+Task ID: 8
+Agent: main (Super Z)
+Task: Round 10 verification + Round 11 — preview-overlay footer, context-menu/preview audits, VLM false-positive triage
+
+Work Log:
+- Round 10 (ab223d4): UI-Screenshots 26/26 PASS + macOS Build SUCCESS (CI still finishing); heatmap in-cell labels confirmed in the real Windows tour
+- VLM false-positive triage (4th + 5th this project): (a) folder-card "name clipped left" = my crop artifact (DOM: full "Local Disk (C:)"); (b) ring "00%" = VLM misread (DOM: 88%, --pct 88); (c) preview "no monospace/no wrap" = wrong (computed: Cascadia Mono chain + pre-wrap, scrollW==clientW) — always DOM/pixel-verify VLM claims before acting
+- Genuine improvement adopted from the preview audit: NEW footer bar on preview overlays (uppercase kind label + "Open with default app" outline action on a panel strip with top border) for text/image/video/audio/pdf kinds — cloud previews excluded (placeholders are never opened); VLM verdict "correct and premium, no defects"
+- Context menu audited (Open/Preview/Show in Explorer/Copy Path/Add to Cleanup): VLM "native-quality, precise alignment, standard system icons"
+- Storage card + sidebar sections re-verified clean (ring 88% + aligned Total/Used/Free rows); inspector spacing rhythm reviewed in CSS — consistent 12/8px cadence, production-clean
+- vitest 32/32, typecheck 0 errors
+
+Stage Summary:
+- Round 11 ready: preview footer + round-10 artifacts
+- 10 consecutive green rounds; long-loop continues

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Disk usage analysis view showing a folder scan result with a sunburst chart.\n(2) QUALITY: PASS. Multi-color visualization renders correctly, UI is fully intact and aligned.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790090103,
+  "id": "20260922231501a68e17f3b8024d76",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922231501a68e17f3b8024d76",
+  "usage": {
+    "completion_tokens": 42,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1117
+  }
+}

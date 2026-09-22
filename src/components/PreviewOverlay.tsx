@@ -137,6 +137,19 @@ export function PreviewOverlay({
             </div>
           )}
         </div>
+        {kind !== "other" && kind !== "loading" && kind !== "cloud" && (
+          <footer className="db-preview-foot">
+            <span>{details?.kind ?? name.split(".").pop()?.toUpperCase() ?? "File"}</span>
+            <button
+              type="button"
+              className="db-outline"
+              style={{ minHeight: 30, padding: "0 13px", fontSize: 11.5 }}
+              onClick={() => onOpenDefault(id)}
+            >
+              <ExternalLinkIcon size={13} /> Open with default app
+            </button>
+          </footer>
+        )}
       </div>
     </div>
   );
