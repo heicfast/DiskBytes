@@ -9,8 +9,41 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bytes } from "../lib/format";
 import { abbreviate } from "./abbrev";
 import {
-  CELL_KIND, DIR_BIT, cssRgba, getLayout, getNames, type Cell, type LayoutResult,
+  CELL_KIND, DIR_BIT, cssRgba, getLayout, getNames, type Cell, type GroupDesc, type LayoutResult,
 } from "./layoutIpc";
+
+/** Synthetic regroup ids (by-type/by-age group cells) live at/above this
+ * base — they are NOT tree nodes; their display names come from
+ * LayoutMeta.groups, never from `get_names` (which resolves them to ""). */
+const SYNTH_BASE = 0xffff0000;
+
+/** Resolve label names for a layout: synthetic group ids map from the
+ * layout's own group legend (client-side); real ids batch through
+ * `get_names`. Keeps group cells labeled AND keeps synthetic ids out of
+ * the IPC round trip. */
+async function resolveNames(
+  generation: number,
+  cells: Cell[],
+  groups: GroupDesc[],
+  mode: string,
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  for (const g of groups) out.set(g.id, g.name);
+  const realIds: number[] = [];
+  for (const c of cells) {
+    if (c.id >= SYNTH_BASE) continue;
+    if (out.has(c.id)) continue;
+    if (!labelable(c, mode)) continue;
+    realIds.push(c.id);
+  }
+  if (realIds.length > 0) {
+    const fetched = await getNames(generation, realIds.slice(0, 400)).catch(
+      () => new Map<number, string>(),
+    );
+    for (const [k, v] of fetched) out.set(k, v);
+  }
+  return out;
+}
 
 export interface CanvasVizProps {
   generation: number;
@@ -119,14 +152,10 @@ export function CanvasViz(props: CanvasVizProps) {
         return;
       }
       // Batch-fetch labels for the biggest cells (spec: get_names batched).
-      const labelIds = res.cells
-        .filter((c) => labelable(c, mode))
-        .slice(0, 400)
-        .map((c) => c.id);
-      // Sunburst draws the root name in the center disc — make sure it
-      // resolves with the same batch (paint() re-fetches for the repaint).
-      if (mode === "sunburst") labelIds.push(res.meta.node);
-      await getNames(generation, labelIds).catch(() => new Map<number, string>());
+      // Synthetic group cells resolve client-side from the group legend.
+      await resolveNames(generation, res.cells, res.meta.groups, mode).catch(
+        () => new Map<number, string>(),
+      );
       if (disposed) return;
       setLayout(res);
     })();
@@ -309,14 +338,19 @@ function paint(canvas: HTMLCanvasElement, layout: LayoutResult, props: CanvasViz
   const cx = layout.meta.center?.[0] ?? w / 2;
   const cy = layout.meta.center?.[1] ?? h / 2;
 
-  const labelIds = layout.cells
-    .filter((c) => labelable(c, mode))
-    .slice(0, 400)
-    .map((c) => c.id);
-  if (mode === "sunburst") labelIds.push(layout.meta.node);
-  void getNames(layout.meta.generation, labelIds).then(
+  void resolveNames(layout.meta.generation, layout.cells, layout.meta.groups, mode).then(
     (names) => {
       // Names resolve async — repaint with them (still once per settle).
+      // Sunburst also gets its root name for the center disc.
+      if (mode === "sunburst" && !names.has(layout.meta.node)) {
+        void getNames(layout.meta.generation, [layout.meta.node]).then((root) => {
+          const n = root.get(layout.meta.node);
+          if (n) {
+            names.set(layout.meta.node, n);
+            drawCells(ctx, layout, props, names, w, h, cx, cy);
+          }
+        });
+      }
       drawCells(ctx, layout, props, names, w, h, cx, cy);
     },
   );

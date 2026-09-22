@@ -77,11 +77,12 @@
 }
 .db-dup-group header strong {
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 680;
 }
 .db-dup-group header span {
-  color: var(--text-tertiary);
+  color: var(--used);
   font-size: 11px;
+  font-weight: 620;
   font-variant-numeric: tabular-nums;
 }
 .db-dup-file {
@@ -134,9 +135,10 @@
   align-items: center;
   gap: 4px;
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 3.5px 10px;
   font-size: 10px;
   font-weight: 700;
+  transition: background var(--fade) ease, border-color var(--fade) ease, color var(--fade) ease;
 }
 .db-keep-tag.keep {
   background: var(--free-soft);
@@ -148,7 +150,8 @@
   color: var(--text-secondary);
 }
 .db-keep-tag.stage:hover {
-  border-color: var(--ink);
+  border-color: color-mix(in oklab, var(--ink) 55%, transparent);
+  background: var(--ink-soft);
   color: var(--ink);
 }
 
@@ -161,15 +164,16 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
   background: var(--card);
-  padding: 12px 16px;
+  padding: 10px 14px;
   margin-bottom: 10px;
   text-align: left;
   width: 100%;
   color: var(--text);
-  transition: border-color var(--fade) ease;
+  transition: border-color var(--fade) ease, box-shadow var(--fade) ease;
 }
 .db-app-row:hover {
   border-color: color-mix(in oklab, var(--ink) 35%, transparent);
+  box-shadow: var(--shadow-1);
 }
 .db-app-icon {
   width: 44px;
@@ -223,9 +227,12 @@
   color: var(--text);
 }
 .db-leftover-count {
-  color: var(--ink);
+  color: var(--used);
   font-weight: 650;
-  font-size: 11px;
+  font-size: 10.5px;
+  background: var(--used-tint);
+  border-radius: 999px;
+  padding: 1.5px 8px;
 }
 .db-app-row .db-app-uninstall {
   min-height: 30px;
@@ -432,6 +439,13 @@
   padding: 6.5px 10px;
   border-bottom: 1px solid var(--divider);
   font-size: 11.5px;
+  transition: background var(--fade) ease;
+}
+.db-procs-row:nth-child(even) {
+  background: color-mix(in oklab, var(--chip) 45%, transparent);
+}
+.db-procs-row:hover {
+  background: var(--chip);
 }
 .db-procs-row strong {
   font-weight: 620;

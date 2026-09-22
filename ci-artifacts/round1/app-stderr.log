@@ -1,0 +1,4 @@
+
+thread 'main' (6184) panicked at core\src\scan\node.rs:299:28:
+index out of bounds: the len is 171 but the index is 4294901763
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

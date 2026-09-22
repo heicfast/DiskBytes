@@ -325,9 +325,24 @@ impl Tree {
     }
 
     /// Names of many ids in one batch (the `get_names(ids)` IPC contract).
+    ///
+    /// Out-of-arena ids — synthetic regroup ids (`SYNTH_BASE + n`, the
+    /// by-type/by-age group cells) or anything stale — resolve to an
+    /// empty string. This is a bulk display path fed straight from
+    /// layout cells; it must NEVER panic the process (CI run 35707319531
+    /// crashed exactly here when a by-type layout's group ids reached
+    /// `name()`'s direct arena index).
     #[must_use]
     pub fn names_batch(&self, ids: &[u32]) -> Vec<String> {
-        ids.iter().map(|&id| self.name(id)).collect()
+        ids.iter()
+            .map(|&id| {
+                if usize::try_from(id).is_ok_and(|i| i < self.arena.len()) {
+                    self.name(id)
+                } else {
+                    String::new()
+                }
+            })
+            .collect()
     }
 
     /// Append one directory's children atomically; returns the contiguous
@@ -616,6 +631,25 @@ mod tests {
     fn node_layout_is_56_bytes() {
         assert_eq!(size_of::<Node>(), 56);
         assert!(size_of::<Node>() <= 72);
+    }
+
+    #[test]
+    fn names_batch_never_panics_on_synthetic_or_stale_ids() {
+        // Regression (CI run 35707319531): by-type/by-age layouts emit
+        // synthetic group ids (SYNTH_BASE + n); `get_names` fed them
+        // straight into `name()`'s direct arena index and PANICKED the
+        // whole app mid-tour. The bulk path must resolve them (and any
+        // stale id) to empty strings instead.
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "C:\\Base");
+        t.set_name(0, "Base");
+        t.append_batch(0, vec![file("a.bin", 10, 10, 1)]);
+        let out = t.names_batch(&[0, 1, crate::layout::regroup::SYNTH_BASE + 3, u32::MAX]);
+        assert_eq!(out.len(), 4);
+        assert_eq!(out[0], "Base");
+        assert_eq!(out[1], "a.bin");
+        assert_eq!(out[2], "", "synthetic group id resolves to empty");
+        assert_eq!(out[3], "", "far-out-of-range id resolves to empty");
     }
 
     #[test]
