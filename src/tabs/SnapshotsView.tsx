@@ -5,7 +5,7 @@
  * different-roots notice.
  */
 import { useEffect, useState } from "react";
-import { CheckIcon, Clock3Icon, CameraIcon, Trash2Icon } from "../components/Icon";
+import { Clock3Icon, CameraIcon, Trash2Icon } from "../components/Icon";
 import { EmptyState } from "../components/buttons";
 import { invoke } from "../lib/ipc";
 import { bytes } from "../lib/format";
@@ -141,7 +141,7 @@ export function SnapshotsView() {
           <div>
             <strong>{s.root}</strong>
             <small>
-              {bytes(s.total)} · {fmtDate(s.takenAt)} · {s.folders.toLocaleString()} folders
+              <b>{bytes(s.total)}</b> · {fmtDate(s.takenAt)} · {s.folders.toLocaleString()} folders
             </small>
           </div>
           <div className="db-snap-toggle" role="group" aria-label="Before or after">
@@ -191,23 +191,38 @@ export function SnapshotsView() {
               <span>Loading both snapshots…</span>
             </div>
           )}
-          {diff?.changes.map((c) => (
-            <div className="db-diff-row" key={c.path} title={c.path}>
-              <span>{c.path}</span>
-              <em className="tnum">{bytes(c.before)}</em>
-              {c.delta > 0 ? (
-                <b className="grew tnum">+{bytes(c.delta)}</b>
-              ) : (
-                <b className="shrank tnum">−{bytes(Math.abs(c.delta))}</b>
-              )}
-            </div>
-          ))}
+          {diff?.changes.map((c) => {
+            const maxAbs = Math.max(
+              1,
+              ...diff.changes.map((x) => Math.abs(x.delta)),
+            );
+            const pct = Math.max(2, (Math.abs(c.delta) / maxAbs) * 100);
+            return (
+              <div className="db-diff-row" key={c.path} title={c.path}>
+                <span>{c.path}</span>
+                <em className="tnum">{bytes(c.before)}</em>
+                {c.delta > 0 ? (
+                  <b className="grew tnum">+{bytes(c.delta)}</b>
+                ) : (
+                  <b className="shrank tnum">−{bytes(Math.abs(c.delta))}</b>
+                )}
+                <span
+                  className="db-diff-bar"
+                  aria-hidden
+                >
+                  <i
+                    style={{
+                      width: `${pct}%`,
+                      background: c.delta > 0 ? "var(--used)" : "var(--free)",
+                    }}
+                  />
+                </span>
+              </div>
+            );
+          })}
           {diff && diff.changes.length === 0 && <div className="db-substate">No folder changed between these snapshots.</div>}
         </div>
       )}
-      <span style={{ display: "none" }}>
-        <CheckIcon size={0} />
-      </span>
     </div>
   );
 }
