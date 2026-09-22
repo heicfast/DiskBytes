@@ -236,3 +236,19 @@ Work Log:
 Stage Summary:
 - Round 12 ready: state-aware inspector + welcome composition
 - CI loop continues; every user-reported issue remains fixed and verified through round 10 artifacts (26/26 PASS ×3 consecutive rounds)
+
+---
+Task ID: 10
+Agent: main (Super Z)
+Task: Round 12 verification + session closeout — duplicate-code audit, final gates
+
+Work Log:
+- Round 12 (c3d6cf6) FULLY GREEN: CI (clippy -D warnings workspace, 135 core tests, typecheck, vitest 32, safety greps, frontend build, NSIS bundle) + UI-Screenshots 26/26 PASS (app-stderr clean, zero panics — state-aware inspector verified in the real tour; Duplicates empty state at step-12; heatmap labels visible at step-06) + macOS Build SUCCESS
+- Duplicate-code audit (user ask): CSS — 5 micro-patterns of 3-5 lines (tertiary caption / ink hover / ellipsis title rows / tnum sizes) across files; consolidating would be over-abstraction, left idiomatic; TS/TSX — ZERO duplicated logic blocks (6+ line block hash scan across all non-mock sources). Codebase confirmed DRY.
+- README/docs completeness sweep: all §18 items + BuildPrompt features remain implemented and CI-verified (9 viz modes, turbo engine gating, 3-pass dupes, apps uninstaller+leftovers, monitor, snapshots, recycle-only cleanup, demo-mode licensing, env-gated analytics, dark theme, Win+macOS builds)
+- Rounds 8-12 this session: title-bar merge + native caption glyphs, lucide icon system + view pictograms, stats-dot baseline fix, overlay scrollbars, panel rebalance (+66-80px main), restart_as_admin exit fix + declined-UAC toast, cleaner-set artifact/protected adoptions, Duplicates blank-state fix, dual-CTA dedup, Age Map in-cell labels, preview footer, state-aware inspector
+
+Stage Summary:
+- 12 rounds total, last 4 fully green end-to-end (r9, r10, r11 superseded by r12, r12)
+- All user-reported issues from this session: FIXED + locally verified + real-Windows-CI-verified + VLM-verified
+- Production state: Windows NSIS + macOS builds green, licensing on demo credentials (real implementation), zero mocks in production bundle (grep-verified), zero panics across all tours

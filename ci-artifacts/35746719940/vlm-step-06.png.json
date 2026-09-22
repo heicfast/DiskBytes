@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: DiskBytesTest folder analysis view showing file age, size, and type breakdowns.\n(2) QUALITY: PASS. UI renders correctly with clear multi-color bars and aligned data.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790091145,
+  "id": "20260922233223c4db707f01ee4e5b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922233223c4db707f01ee4e5b",
+  "usage": {
+    "completion_tokens": 43,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1118
+  }
+}
