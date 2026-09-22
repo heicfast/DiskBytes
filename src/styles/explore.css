@@ -1,0 +1,582 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * Explore — header (big folder name + stats), mode toolbar (icon capsule
+ * picker with expanding label, color modes, depth, abbreviate), the
+ * visual stage, scanning/idle states, folder cards + files grid.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.db-main {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ── Content head ───────────────────────────────────────────────────── */
+.db-content-head {
+  flex: none;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--background);
+}
+.db-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+}
+.db-title-row > div {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  min-width: 0;
+}
+.db-title-row h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  font-weight: 720;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46vw;
+}
+.db-title-row .db-stat {
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.db-title-row .db-stat.size {
+  font-weight: 700;
+  color: var(--text);
+}
+.db-title-row i.db-dot-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  align-self: center;
+  flex: none;
+}
+.db-title-row .db-title-actions {
+  display: flex;
+  gap: 7px;
+  flex: none;
+}
+
+/* ── Toolbar row ────────────────────────────────────────────────────── */
+.db-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  margin-top: 12px;
+  flex-wrap: nowrap;
+}
+
+/* Mode picker — icon-only capsule; the active one grows its label */
+.db-mode-picker {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  padding: 3px;
+  background: var(--card);
+  gap: 1px;
+}
+.db-mode-picker button {
+  position: relative;
+  height: 30px;
+  min-width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--text-tertiary);
+  transition: color var(--fade) ease;
+}
+.db-mode-picker button:hover {
+  color: var(--text);
+  background: var(--chip);
+}
+.db-mode-picker button[data-active="true"] {
+  color: var(--on-ink);
+  padding: 0 11px;
+  font-weight: 650;
+}
+.db-mode-picker button[data-active="true"]:hover {
+  background: transparent;
+}
+.db-mode-pill {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  border-radius: var(--radius-m);
+  z-index: -1;
+}
+.db-mode-picker button span {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+/* Segmented control (color modes, top-sizes scopes) */
+.db-segmented {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 3px;
+  background: var(--card);
+  gap: 1px;
+}
+.db-segmented button {
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  padding: 0 11px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 570;
+  transition: color var(--fade) ease;
+  white-space: nowrap;
+}
+.db-segmented button:hover {
+  color: var(--text);
+}
+.db-segmented button[data-active="true"] {
+  background: var(--chip);
+  color: var(--text);
+  font-weight: 650;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--text) 9%, transparent);
+}
+
+/* Depth slider */
+.db-depth {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+}
+.db-depth input[type="range"] {
+  width: 92px;
+  accent-color: var(--ink);
+  height: 14px;
+}
+.db-depth b {
+  font-size: 11px;
+  min-width: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* Caption + abbreviate */
+.db-toolbar-caption {
+  flex: 1;
+  margin: 0;
+  text-align: right;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-abbreviate {
+  flex: none;
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--chip);
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  transition: all var(--fade) ease;
+}
+.db-abbreviate:hover {
+  background: var(--track);
+  color: var(--text);
+}
+.db-abbreviate[data-active="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+}
+
+/* ── Visual stage ───────────────────────────────────────────────────── */
+.db-visual-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--background);
+}
+.db-visual-stage.db-scroll {
+  scrollbar-gutter: stable;
+}
+
+/* ── Scanning state ─────────────────────────────────────────────────── */
+.db-state {
+  height: 100%;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px;
+  text-align: center;
+}
+.db-state h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.db-state .db-live-counter {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.db-state .db-live-counter b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.db-state .db-current-path {
+  max-width: 70%;
+  font: 10.5px/1.6 var(--font-mono);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: center;
+}
+.db-state .db-state-actions {
+  display: flex;
+  gap: 10px;
+}
+.db-state p {
+  margin: 0;
+  color: var(--text-secondary);
+  max-width: 380px;
+  line-height: 1.55;
+}
+
+/* Idle state */
+.db-idle-art {
+  width: 74px;
+  height: 74px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--chip);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+/* ── Folders mode ───────────────────────────────────────────────────── */
+.db-folders-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: db-fade-up var(--fade) ease both;
+}
+.db-folders-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 8px;
+  margin: 0 -20px;
+  padding-right: 20px;
+}
+.db-view-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 12px;
+}
+.db-view-heading h2 {
+  /* Section headers read as labels, not competing titles (design
+  * audit: they fought the card names) — uppercase + tracking. */
+  font-size: 12.5px;
+  font-weight: 750;
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.db-view-heading .db-count-chip {
+  background: var(--chip);
+  border-radius: var(--radius-s);
+  padding: 1.5px 8px;
+  height: 19px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 6%, transparent);
+}
+.db-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 12px;
+}
+
+/* Folder-shaped card: tab + sheen + pastel tint + hover lift */
+.db-folder-card {
+  position: relative;
+  height: 148px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--text) 7%, transparent);
+  border-radius: var(--radius-l);
+  background: var(--tone, var(--pastel-blue));
+  color: var(--on-pastel);
+  text-align: left;
+  padding: 68px 16px 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.db-folder-card::before {
+  content: "";
+  position: absolute;
+  inset: 18px 0 0;
+  background: linear-gradient(
+    125deg,
+    color-mix(in oklab, var(--tone) 72%, white),
+    var(--tone)
+  );
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.db-folder-tab {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 52%;
+  height: 42px;
+  background: color-mix(in oklab, var(--tone) 86%, white);
+  border-radius: var(--radius-l) 30px 0 0;
+}
+.db-folder-card::after {
+  content: "";
+  position: absolute;
+  inset: 18px 0 0;
+  background: var(--card-sheen);
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  pointer-events: none;
+}
+.db-folder-card:hover {
+  transform: translateY(-2.5px);
+  box-shadow: 0 12px 24px color-mix(in oklab, var(--text) 12%, transparent);
+}
+.db-folder-card.is-selected {
+  border-color: color-mix(in oklab, var(--ink) 65%, transparent);
+  box-shadow:
+    0 0 0 2.5px color-mix(in oklab, var(--ink) 55%, transparent),
+    0 10px 22px color-mix(in oklab, var(--text) 10%, transparent);
+}
+.db-folder-card.is-protected {
+  filter: saturate(0.55);
+}
+.db-folder-name {
+  position: relative;
+  z-index: 1;
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-folder-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--on-pastel) 14%, transparent);
+  font-size: 10.5px;
+  color: var(--on-pastel-secondary);
+}
+.db-folder-meta .db-dots {
+  display: inline-flex;
+  align-items: center;
+}
+.db-folder-meta i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: -3.5px;
+  border: 1.5px solid color-mix(in oklab, var(--tone) 82%, white);
+}
+.db-folder-meta i:nth-child(2) {
+  margin-right: 5px;
+}
+.db-folder-meta strong {
+  color: var(--on-pastel);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.db-folder-protected-badge {
+  position: absolute;
+  top: 24px;
+  right: 14px;
+  z-index: 2;
+  color: var(--on-pastel-secondary);
+}
+
+/* Files grid */
+.db-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.db-file-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 10px 12px;
+  background: var(--card);
+  text-align: left;
+  transition: border-color var(--fade) ease, box-shadow var(--fade) ease;
+}
+.db-file-row:hover {
+  border-color: color-mix(in oklab, var(--ink) 40%, transparent);
+}
+.db-file-row.is-selected {
+  border-color: color-mix(in oklab, var(--ink) 70%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ink) 25%, transparent);
+}
+.db-file-row > svg,
+.db-file-row .db-file-glyph {
+  color: var(--file-cat, var(--text-tertiary));
+  flex: none;
+}
+.db-file-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+  min-width: 0;
+}
+.db-file-row strong {
+  font-size: 12.5px;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-file-row small {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-file-row > b {
+  font-size: 11.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.db-file-row .db-cloud-badge {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  color: var(--text-tertiary);
+}
+.db-files-more {
+  margin-top: 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: center;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-m);
+}
+
+/* Empty inner folder */
+.db-substate {
+  /* Empty states carry real information — make them scannable (audit:
+   * "functionally invisible"). */
+  padding: 72px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.db-substate::before {
+  content: "";
+  display: block;
+  width: 34px;
+  height: 1.5px;
+  margin: 0 auto 18px;
+  background: color-mix(in oklab, var(--text) 14%, transparent);
+  border-radius: 1px;
+}
+
+/* Error state */
+.db-state.db-error h2 {
+  color: var(--used);
+}
+
+/* Toolbar responsive ladder: caption → segmented labels → wrap */
+@media (max-width: 1500px) {
+  .db-toolbar-caption {
+    display: none;
+  }
+}
+@media (max-width: 1340px) {
+  .db-depth {
+    display: none;
+  }
+}
+@media (max-width: 1280px) {
+  .db-content-head {
+    padding-inline: 16px;
+  }
+  .db-title-row h1 {
+    font-size: 24px;
+    max-width: 34vw;
+  }
+  .db-title-row > div {
+    gap: 8px;
+  }
+  .db-toolbar-row {
+    gap: 7px;
+  }
+  .db-mode-picker button {
+    min-width: 28px;
+  }
+  .db-mode-picker button[data-active="true"] {
+    padding-inline: 9px;
+  }
+}
+@media (max-width: 1180px) {
+  .db-toolbar-row {
+    flex-wrap: wrap;
+  }
+  .db-segmented {
+    order: 3;
+  }
+}

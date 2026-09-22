@@ -1,0 +1,502 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * Viz — the canvas stage container (treemap/sunburst/flame/bubbles/
+ * mind-map painted by CanvasViz), Top Sizes ranked rows, Age Map
+ * buckets + heatmap + Big&Untouched, List outline.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.db-viz-wrap {
+  height: 100%;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 8px;
+}
+.db-viz-canvas-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  background: var(--background);
+}
+.db-viz-canvas-shell canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.db-viz-canvas-shell canvas.db-overlay-canvas {
+  pointer-events: none;
+}
+.db-viz-foot {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 2px 4px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.db-viz-foot .db-viz-groups {
+  display: flex;
+  gap: 14px;
+  overflow: hidden;
+}
+.db-viz-foot .db-viz-groups span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.db-viz-foot .db-viz-groups i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+/* ── Top sizes ──────────────────────────────────────────────────────── */
+.db-top-sizes {
+  padding: 12px 20px 30px;
+  animation: db-fade-up var(--fade) ease both;
+}
+.db-top-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 4px;
+}
+.db-top-head .db-shown {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.db-ranked {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+}
+.db-ranked button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 26px 20px minmax(140px, 1fr) 92px 52px 74px;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  padding: 3px 4px;
+  border-radius: var(--radius-s);
+  text-align: left;
+}
+.db-ranked button:hover {
+  background: var(--chip);
+}
+.db-ranked button > span.db-rank {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.db-ranked button > svg {
+  color: var(--text-secondary);
+}
+.db-ranked em {
+  color: var(--text-tertiary);
+  font-style: normal;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.db-ranked small {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-ranked button > b {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.rank-bar {
+  height: 36px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: var(--radius-s);
+  overflow: hidden;
+  min-width: 0;
+}
+.rank-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--share, 30%) - 2px);
+  min-width: 3px;
+  background: var(--tone, var(--pastel-blue));
+  border-radius: var(--radius-s) 0 0 var(--radius-s);
+  transition: width var(--spring) ease;
+}
+.rank-bar > span {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rank-bar strong {
+  color: var(--on-pastel);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-bar small {
+  color: var(--on-pastel-secondary);
+  font-size: 9.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.db-ranked button.is-selected .rank-bar {
+  outline: 2px solid color-mix(in oklab, var(--ink) 60%, transparent);
+}
+.db-ranked .db-protected-flag {
+  color: var(--text-tertiary);
+}
+
+/* ── Age map ────────────────────────────────────────────────────────── */
+.db-age {
+  display: grid;
+  gap: 14px;
+  padding: 14px 20px 30px;
+  animation: db-fade-up var(--fade) ease both;
+}
+.db-age > section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  padding: 14px 16px;
+  background: var(--card);
+}
+.db-age section > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  font-size: 9.5px;
+  font-weight: 700;
+  margin-bottom: 11px;
+}
+.db-age section > header b {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.age-row {
+  display: grid;
+  grid-template-columns: 108px minmax(110px, 1fr) 78px 48px;
+  align-items: center;
+  gap: 12px;
+  height: 30px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+.age-row > span {
+  white-space: nowrap;
+}
+.age-row > i {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--track);
+  overflow: hidden;
+}
+.age-row > i b {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: 7px;
+  background: var(--age-tone, var(--age-1));
+}
+.age-row strong {
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.age-row em {
+  font-style: normal;
+  text-align: right;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+/* heatmap */
+.heat-labels,
+.heat-row {
+  display: grid;
+  grid-template-columns: 44px repeat(12, 1fr);
+  gap: 4px;
+}
+.heat-labels {
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  margin-bottom: 2px;
+}
+.heat-row {
+  height: 36px;
+  margin-top: 4px;
+  align-items: stretch;
+}
+.heat-row > span {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.heat-row i {
+  position: relative;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--pastel-blue) calc(var(--heat, 0.35) * 100%), var(--track));
+  display: grid;
+  place-items: center;
+}
+.heat-row i.busiest {
+  outline: 2px solid var(--ink);
+}
+.heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--text-tertiary);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.heat-legend .db-heat-scale {
+  display: flex;
+  gap: 2px;
+}
+.heat-legend .db-heat-scale i {
+  width: 14px;
+  height: 9px;
+  border-radius: 3px;
+}
+/* big & untouched */
+.db-big-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.db-big-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto 84px;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--divider);
+}
+.db-big-row:last-of-type {
+  border-bottom: 0;
+}
+.db-big-row > svg {
+  color: var(--text-tertiary);
+  flex: none;
+}
+.db-big-row > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.db-big-row strong {
+  font-size: 12.5px;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-big-row small {
+  font: 9.5px/1.4 var(--font-mono);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+.db-big-row > b {
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.db-stage-toggle {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text-secondary);
+  transition: all var(--fade) ease;
+}
+.db-stage-toggle:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.db-stage-toggle.staged {
+  background: var(--free);
+  border-color: var(--free);
+  color: #fff;
+}
+
+/* ── List mode ──────────────────────────────────────────────────────── */
+.db-list {
+  padding: 10px 20px 30px;
+  animation: db-fade-up var(--fade) ease both;
+}
+.list-head,
+.db-list-row {
+  display: grid;
+  grid-template-columns: 18px 18px minmax(140px, 1fr) minmax(90px, 160px) 44px 86px 70px;
+  align-items: center;
+  gap: 8px;
+}
+.list-head {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text-tertiary);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 650;
+}
+.db-list-row {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  text-align: left;
+  border-radius: var(--radius-xs);
+}
+.db-list-row:hover,
+.db-list-row.is-selected {
+  background: var(--chip);
+}
+.db-list-row .db-disclose {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-tertiary);
+  transition: transform var(--fade) ease, background var(--fade) ease;
+}
+.db-list-row .db-disclose:hover {
+  background: var(--track);
+  color: var(--text);
+}
+.db-list-row .db-disclose[data-open="true"] {
+  transform: rotate(90deg);
+}
+.db-list-row > svg.db-row-glyph {
+  color: var(--text-secondary);
+}
+.db-list-row strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-list-row > i {
+  height: 5px;
+  border-radius: 4px;
+  background: var(--track);
+  overflow: hidden;
+}
+.db-list-row > i b {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--row-color, var(--pastel-blue));
+}
+.db-list-row em {
+  color: var(--text-tertiary);
+  font-style: normal;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.db-list-row > span {
+  color: var(--text-secondary);
+  text-align: right;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.db-list-row > b {
+  text-align: right;
+  font-size: 11.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.db-list-row .db-row-flags {
+  display: inline-flex;
+  gap: 3px;
+  color: var(--text-tertiary);
+}
+
+/* loading shimmer for async sections */
+.db-loading-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* Layout-failure state (surfaces get_layout errors inline — a silent
+   blank canvas is undiagnosable from CI screenshots). */
+.db-viz-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--background);
+}
+.db-viz-error strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+.db-viz-error span {
+  font-size: 12px;
+  font-family: var(--mono, monospace);
+  max-width: 480px;
+  overflow-wrap: anywhere;
+  color: var(--danger, #b3574d);
+}

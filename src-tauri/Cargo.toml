@@ -1,0 +1,128 @@
+[package]
+name = "diskbytes"
+version = "0.1.0"
+description = "DiskBytes — Windows disk-space analyzer. Rust core + Tauri 2 (WebView2) + React/TS Canvas UI."
+authors = ["DiskBytes"]
+edition = "2021"
+rust-version = "1.80"
+
+# The tauri app crate is also the workspace root (decision D10): `core/` holds all
+# platform-independent logic so it can be unit-tested on any host without linking
+# WebView shells.
+[workspace]
+members = ["core"]
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary to make the lib name
+# unique and not conflict with the bin name (Windows name clash, rust issue 8519).
+name = "diskbytes_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+diskbytes-core = { path = "core" }
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+parking_lot = "0.12"
+rayon = "1.10"
+sha2 = "0.10"
+png = "0.17"
+# License client: raw reqwest against Dodo's 3 public endpoints (doc 06
+# §6 decision — the SDK stays backend-side); rustls, blocking (the
+# scheduler owns a dedicated thread).
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
+    "blocking",
+    "json",
+] }
+# Engine telemetry (doc 07): blocking client, default features OFF
+# (no async-client, no error-tracking).
+posthog-rs = { version = "0.26", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# objc2: the maintained ObjC runtime bridge (msg_send + class lookup ONLY —
+# toll-free CoreFoundation bridging covers NSString/NSURL/NSArray via hand-
+# FFI, so no objc2-foundation/app-kit subcrates needed). Decision-log entry
+# S5: the cross-platform doc's platform-macos seam, Option A.
+objc2 = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+# windows-core: the windows-rs foundation crate (a version-locked companion
+# of the windows crate below — NOT a new dependency; the #[implement] COM
+# macro emits windows_core:: paths that need a direct import).
+windows-core = "0.62"
+# windows-future: version-locked companion of the windows crate (async op
+# types for MSIX RemovePackageAsync) — same family rule as windows-core.
+windows-future = "0.3.2"
+windows = { version = "0.62", features = [
+    "Wdk_Storage_FileSystem",
+    "Wdk_System_SystemInformation",
+    "ApplicationModel",
+    "Foundation",
+    "Management_Deployment",
+    "Storage",
+    "Storage_Search",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+    "Win32_System_IO",
+    "Win32_System_SystemServices",
+    "Win32_System_SystemInformation",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Registry",
+    "Win32_System_Memory",
+    "Win32_System_Com",
+    "Win32_System_DataExchange",
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Graphics_Gdi",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_Security_Cryptography",
+    "Win32_System_Kernel",
+    "Win32_System_WindowsProgramming",
+    "Win32_Devices",
+] }
+
+[dev-dependencies]
+tiny-skia = "0.11"
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = "allow"
+# The product name "DiskBytes" and platform terms ("WebView", "Tauri") are
+# CamelCase by design; backticking every occurrence hurts doc readability.
+doc_markdown = "allow"
+# Hex RGB colors (0x93C5FD pastel blue, …) read better without digit
+# separators; the spec spells colors that way (D11 parity with core).
+unreadable_literal = "allow"
+# Byte counts (u64) become f64 ONLY at the percentage/display boundary
+# (share-of-parent, % of folder); 52-bit mantissa precision is beyond
+# display precision (D11 parity with core).
+cast_precision_loss = "allow"
+# Row ranks / indices (usize -> u32): every row list is capped (200/500/600)
+# by construction, so truncation cannot occur (D11 parity with core).
+cast_possible_truncation = "allow"
+
+# Spec §16 / doc 04 §4: strip symbols (DiskBuddy leaked 23,822 — RE finding), fat LTO, single unit.
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = true

@@ -1,0 +1,717 @@
+//! Quick Wins (`BuildPrompt` §6): junk categories computed from the
+//! already-built tree — no extra disk pass.
+//!
+//! Matching resolves each known location to nodes by descending the tree
+//! from the scan root when it lies inside the scanned subtree, expanding
+//! `*` wildcards over children. A category never counts something nested
+//! inside its own match; each category is capped at 400 items.
+
+use serde::{Deserialize, Serialize};
+
+use crate::scan::node::Tree;
+
+/// Per-category item cap (spec §6).
+pub const CATEGORY_CAP: usize = 400;
+
+/// A Quick Wins row.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuickWinCategory {
+    /// Stable id (for analytics + navigation).
+    pub id: &'static str,
+    /// Row title.
+    pub title: &'static str,
+    /// Icon tag.
+    pub icon: &'static str,
+    /// Node ids matched (≤ [`CATEGORY_CAP`]).
+    pub items: Vec<u32>,
+    /// Total on-disk bytes of matched items.
+    pub size: u64,
+    /// Review-only rows refuse "Add all" (VM disks, Windows.old) —
+    /// enforced here, not just in the UI (decision D7).
+    pub review_only: bool,
+    /// Context-menu extra for special rows (e.g. storagesense URI).
+    pub extra: Option<&'static str>,
+}
+
+/// Known-folder style location patterns resolved against the tree.
+/// `*` expands over one path level (spec §6).
+#[derive(Debug, Clone)]
+pub struct Pattern {
+    /// Category id this pattern feeds.
+    pub category: &'static str,
+    /// Environment-root prefix, e.g. `%LOCALAPPDATA%` (resolved by the
+    /// engine to an absolute path before matching).
+    pub env: &'static str,
+    /// Path segments under the env root; `*` matches any single segment.
+    pub segments: &'static [&'static str],
+}
+
+/// The full pattern table (spec §6 categories, verbatim locations).
+#[must_use]
+pub fn patterns() -> Vec<Pattern> {
+    let mut p: Vec<Pattern> = Vec::new();
+    let mut add = |category: &'static str, env: &'static str, segments: &'static [&'static str]| {
+        p.push(Pattern {
+            category,
+            env,
+            segments,
+        });
+    };
+    if cfg!(target_os = "macos") {
+        // Mac BuildPrompt §5 categories (mac paths; the engine resolves
+        // %HOME% from the app's known folders).
+        add("downloads", "%HOME%", &["Downloads"]);
+        add("temp_caches", "%HOME%", &["Library", "Caches"]);
+        add("temp_caches", "%HOME%", &["Library", "Logs"]);
+        add("ios_simulators", "%HOME%", &["Developer", "CoreSimulator"]);
+        add(
+            "xcode_derived",
+            "%HOME%",
+            &["Library", "Developer", "Xcode", "DerivedData"],
+        );
+        add("dev_caches", "%HOME%", &[".cargo", "registry"]);
+        add("dev_caches", "%HOME%", &[".gradle", "caches"]);
+        add("dev_caches", "%HOME%", &[".npm"]);
+        add("android_emulators", "%HOME%", &[".android", "avd"]);
+    } else {
+        // Downloads (redirected known folder — the engine resolves it).
+        add("downloads", "%USERPROFILE%", &["Downloads"]);
+        // Temp & caches.
+        add("temp_caches", "%LOCALAPPDATA%", &["Temp"]);
+        add(
+            "temp_caches",
+            "%LOCALAPPDATA%",
+            &["Microsoft", "Windows", "INetCache"],
+        );
+        add("temp_caches", "%LOCALAPPDATA%", &["CrashDumps"]);
+        add("temp_caches", "%LOCALAPPDATA%", &["D3DSCache"]);
+        add(
+            "temp_caches",
+            "%LOCALAPPDATA%",
+            &["Microsoft", "Windows", "WER"],
+        );
+        // Browser caches (Chrome/Edge/Brave + Firefox).
+        for browser in [
+            "Google\\Chrome",
+            "Microsoft\\Edge",
+            "BraveSoftware\\Brave-Browser",
+        ] {
+            for cache in ["Cache", "Code Cache", "GPUCache"] {
+                let segs: Vec<&str> = browser.split('\\').chain(["*", cache]).collect();
+                let segs: &[&str] = Box::leak(segs.into_boxed_slice());
+                add("browser_caches", "%LOCALAPPDATA%", segs);
+            }
+        }
+        add(
+            "browser_caches",
+            "%LOCALAPPDATA%",
+            &["Mozilla", "Firefox", "Profiles", "*", "cache2"],
+        );
+        // Developer caches.
+        add("dev_caches", "%USERPROFILE%", &[".nuget", "packages"]);
+        add("dev_caches", "%USERPROFILE%", &[".cargo", "registry"]);
+        add("dev_caches", "%USERPROFILE%", &[".gradle", "caches"]);
+        add("dev_caches", "%LOCALAPPDATA%", &["npm-cache"]);
+        add("dev_caches", "%LOCALAPPDATA%", &["pip", "Cache"]);
+        add("dev_caches", "%LOCALAPPDATA%", &["pnpm", "store"]);
+        add("dev_caches", "%LOCALAPPDATA%", &["Yarn", "Cache"]);
+        // Android emulators.
+        add("android_emulators", "%USERPROFILE%", &[".android", "avd"]);
+    } // end windows pattern block
+      // Shared categories (path-shape agnostic): node_modules, build
+      // artifacts, large media, VM disks (any-depth / file-level).
+      // node_modules (any depth).
+    add("node_modules", "**", &["node_modules"]);
+    // Build artifacts (folder names, any depth, with sibling rules).
+    add(
+        "build_artifacts",
+        "**",
+        &[
+            "build",
+            ".build",
+            "dist",
+            ".next",
+            ".turbo",
+            ".parcel-cache",
+            "__pycache__",
+            ".gradle",
+        ],
+    );
+    p
+}
+
+/// Node-name predicates that need parent/sibling context (build-artifact
+/// `target`/`bin`/`obj` rules — spec §6).
+#[must_use]
+pub fn build_artifact_with_sibling(name: &[u16], siblings: &[Vec<u16>]) -> bool {
+    fn eq(utf16: &[u16], ascii: &str) -> bool {
+        if utf16.len() != ascii.len() {
+            return false;
+        }
+        utf16
+            .iter()
+            .zip(ascii.bytes())
+            .all(|(&c, b)| lower_ascii_u16(c) == u16::from(b.to_ascii_lowercase()))
+    }
+    let has_ext = |exts: &[&str]| siblings.iter().any(|s| exts.iter().any(|&e| eq(s, e)));
+    if eq(name, "target") {
+        return has_ext(&["Cargo.toml", "pom.xml"]);
+    }
+    if eq(name, "bin") || eq(name, "obj") {
+        return has_ext(&["project.json"]) || has_ext(&["*.csproj", "*.vcxproj"]) || {
+            // wildcard sibling check
+            siblings.iter().any(|s| {
+                let s_str = String::from_utf16_lossy(s.as_slice());
+                s_str.to_ascii_lowercase().ends_with(".csproj")
+                    || s_str.to_ascii_lowercase().ends_with(".vcxproj")
+            })
+        };
+    }
+    false
+}
+
+/// Review-only VM-disk roots (spec §6): `*.vhdx`/`*.vmdk` under specific
+/// roots, and any `.vhdx` ≥ 1 GB.
+pub const VM_DISK_ROOTS: [&[&str]; 3] = [
+    &["%LOCALAPPDATA%", "Packages", "*", "LocalState"],
+    &["%LOCALAPPDATA%", "Docker"],
+    &["%USERPROFILE%", "VirtualBox VMs"],
+];
+
+/// Minimum standalone `.vhdx` size for the VM-disks row (1 GB).
+pub const VM_DISK_MIN: u64 = 1024 * 1024 * 1024;
+
+/// Resolve every Quick Wins category against the tree (spec §6).
+///
+/// `env_roots` maps `%LOCALAPPDATA%` etc. to absolute paths (engine
+/// resolves via known folders; also `%USERPROFILE%`).
+/// `now` feeds the large-media age-agnostic size rule.
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn resolve(
+    tree: &Tree,
+    env_roots: &std::collections::HashMap<String, String>,
+    now: i64,
+) -> Vec<QuickWinCategory> {
+    let mut out: Vec<QuickWinCategory> = Vec::new();
+    let mut used: std::collections::HashSet<u32> = std::collections::HashSet::new();
+
+    let push_cat = |id: &'static str,
+                    title: &'static str,
+                    icon: &'static str,
+                    review_only: bool,
+                    extra: Option<&'static str>,
+                    items: Vec<u32>,
+                    used: &mut std::collections::HashSet<u32>|
+     -> Option<QuickWinCategory> {
+        // Drop items nested inside an already-matched item of the SAME
+        // category (spec: "never counts something nested inside its own
+        // match") and enforce the cap.
+        let mut filtered: Vec<u32> = Vec::with_capacity(items.len());
+        for &it in &items {
+            if filtered.iter().any(|&f| tree.is_descendant_of(it, f)) {
+                continue;
+            }
+            filtered.push(it);
+            if filtered.len() >= CATEGORY_CAP {
+                break;
+            }
+        }
+        for &f in &filtered {
+            used.insert(f);
+        }
+        if filtered.is_empty() {
+            return None;
+        }
+        let size: u64 = filtered
+            .iter()
+            .map(|&id| tree.node(id).map_or(0, |n| n.on_disk))
+            .sum();
+        Some(QuickWinCategory {
+            id,
+            title,
+            icon,
+            items: filtered,
+            size,
+            review_only,
+            extra,
+        })
+    };
+
+    // Pattern-based categories. Env roots may be keyed with or without the
+    // `%` wrapper (the engine passes wrapped; tests and future callers may
+    // pass bare) — both resolve.
+    let env_lookup = |key: &str| -> Option<&String> {
+        env_roots
+            .get(key)
+            .or_else(|| env_roots.get(key.trim_matches('%')))
+    };
+    let mut buckets: std::collections::HashMap<&str, Vec<u32>> = std::collections::HashMap::new();
+    for pat in patterns() {
+        let Some(root) = env_lookup(pat.env) else {
+            continue;
+        };
+        for id in match_pattern(tree, root, pat.segments) {
+            buckets.entry(pat.category).or_default().push(id);
+        }
+    }
+    for (id, title, icon, key) in [
+        ("downloads", "Downloads", "download", "downloads"),
+        ("temp_caches", "Temp & caches", "temp", "temp_caches"),
+        (
+            "browser_caches",
+            "Browser caches",
+            "browser",
+            "browser_caches",
+        ),
+        ("dev_caches", "Developer caches", "code", "dev_caches"),
+        (
+            "android_emulators",
+            "Android emulators",
+            "phone",
+            "android_emulators",
+        ),
+    ] {
+        if let Some(items) = buckets.remove(key) {
+            if let Some(cat) = push_cat(id, title, icon, false, None, items, &mut used) {
+                out.push(cat);
+            }
+        }
+    }
+
+    // node_modules: any depth, name match (uses `**`).
+    let nm = find_named(tree, tree.root, "node_modules", true);
+    if let Some(cat) = push_cat(
+        "node_modules",
+        "node_modules",
+        "code",
+        false,
+        None,
+        nm,
+        &mut used,
+    ) {
+        out.push(cat);
+    }
+
+    // Build artifacts.
+    let ba = find_build_artifacts(tree, tree.root);
+    if let Some(cat) = push_cat(
+        "build_artifacts",
+        "Build artifacts",
+        "hammer",
+        false,
+        None,
+        ba,
+        &mut used,
+    ) {
+        out.push(cat);
+    }
+
+    // Large media: video/audio/image ≥ 10 MB.
+    let lm = find_large_media(tree, tree.root);
+    if let Some(cat) = push_cat(
+        "large_media",
+        "Large media",
+        "video",
+        false,
+        None,
+        lm,
+        &mut used,
+    ) {
+        out.push(cat);
+    }
+
+    // VM disks (review-only).
+    let mut vm: Vec<u32> = Vec::new();
+    for root in VM_DISK_ROOTS {
+        let mut segs: Vec<String> = Vec::new();
+        let mut it = root.iter();
+        if let Some(env) = it.next() {
+            if let Some(base) = env_roots.get(&(*env).to_string().replace('%', "")) {
+                segs.push(base.clone());
+            } else if let Some(base) = env_roots.get(*env) {
+                segs.push(base.clone());
+            } else {
+                continue;
+            }
+        }
+        for s in it {
+            segs.push((*s).to_string());
+        }
+        let seg_refs: Vec<&str> = segs.iter().map(String::as_str).collect();
+        let joined = if cfg!(target_os = "macos") {
+            segs.join("/")
+        } else {
+            segs.join("\\")
+        };
+        for id in match_pattern(tree, &joined, &seg_refs[1..]) {
+            let _ = id;
+        }
+        // Simpler: resolve via the first env root then match remaining segs.
+        if let Some(base) = env_roots.get(&root[0].to_string().replace('%', "")) {
+            let rest: Vec<&str> = root[1..].to_vec();
+            for id in match_pattern(tree, base, &rest) {
+                vm.push(id);
+            }
+        }
+    }
+    // Any .vhdx ≥ 1 GB anywhere.
+    tree.walk(tree.root, |id, n| {
+        if !n.is_dir() {
+            let name = tree.name_u16(id);
+            if has_ext_ci(name, "vhdx") && n.logical >= VM_DISK_MIN {
+                vm.push(id);
+            }
+        }
+    });
+    if let Some(cat) = push_cat("vm_disks", "VM disks", "server", true, None, vm, &mut used) {
+        out.push(cat);
+    }
+
+    // Previous Windows install (review-only + storagesense link).
+    let mut wo: Vec<u32> = Vec::new();
+    tree.walk(tree.root, |id, n| {
+        if n.is_dir() {
+            let name = tree.name_u16(id);
+            if eq_ci(name, "Windows.old") {
+                wo.push(id);
+            }
+        }
+    });
+    if let Some(cat) = push_cat(
+        "windows_old",
+        "Previous Windows install",
+        "clock",
+        true,
+        Some("ms-settings:storagesense"),
+        wo,
+        &mut used,
+    ) {
+        out.push(cat);
+    }
+
+    let _ = now;
+    out.sort_unstable_by_key(|c| std::cmp::Reverse(c.size));
+    out
+}
+
+/// Match an absolute root + segments (with `*`) against the tree.
+/// Returns node ids of the FINAL segment matches that lie under the root.
+/// Ids come from [`Tree::children_sorted`], so every candidate is a live
+/// arena node; malformed ids are skipped rather than panicking.
+#[must_use]
+pub fn match_pattern(tree: &Tree, root: &str, segments: &[&str]) -> Vec<u32> {
+    let mut out = Vec::new();
+    // Find the tree node for `root` by comparing display paths.
+    let root_norm = normalize(root);
+    let start = find_node_by_path(tree, &root_norm).unwrap_or(tree.root);
+    // Walk segments from `start`.
+    let mut current: Vec<u32> = vec![start];
+    for seg in segments {
+        let mut next: Vec<u32> = Vec::new();
+        for &cur in &current {
+            for &cid in tree.children_sorted(cur) {
+                let Some(n) = tree.node(cid) else { continue };
+                if n.is_removed() {
+                    continue;
+                }
+                if *seg == "*" || eq_ci(tree.name_u16(cid), seg) {
+                    next.push(cid);
+                }
+            }
+        }
+        current = next;
+        if current.is_empty() {
+            break;
+        }
+    }
+    out.extend(current.iter().copied().filter(|&id| id != tree.root));
+    out
+}
+
+/// Case-insensitive ASCII compare of a UTF-16 name against a `&str`.
+fn eq_ci(utf16: &[u16], ascii: &str) -> bool {
+    if utf16.len() != ascii.len() {
+        return false;
+    }
+    utf16
+        .iter()
+        .zip(ascii.bytes())
+        .all(|(&c, b)| lower_ascii_u16(c) == u16::from(b.to_ascii_lowercase()))
+}
+
+/// `A`–`Z` (ASCII) → `a`–`z`; everything else unchanged. `u16` has no
+/// `to_ascii_lowercase` inherent method, so this is the manual twin.
+#[inline]
+fn lower_ascii_u16(c: u16) -> u16 {
+    if (0x41..=0x5A).contains(&c) {
+        c + 0x20
+    } else {
+        c
+    }
+}
+
+/// Normalize a path for comparison: lowercase, forward to back slashes,
+/// drop trailing separators and the `\\?\` prefix.
+fn normalize(path: &str) -> String {
+    let mut p = path.replace('/', "\\").to_ascii_lowercase();
+    if let Some(stripped) = p.strip_prefix(r"\\?\") {
+        p = stripped.to_string();
+    }
+    while p.ends_with('\\') {
+        p.pop();
+    }
+    p
+}
+
+/// Find a node by normalized display path (walk up from each root ref).
+#[must_use]
+pub fn find_node_by_path(tree: &Tree, norm_path: &str) -> Option<u32> {
+    for r in &tree.roots {
+        let rn = normalize(&r.path);
+        if norm_path == rn {
+            return Some(r.node);
+        }
+        // Walk below the root.
+        if let Some(rest) = norm_path.strip_prefix(&(rn.clone() + "\\")) {
+            let mut cur = r.node;
+            let mut ok = true;
+            for seg in rest.split('\\') {
+                let found = tree
+                    .children_sorted(cur)
+                    .iter()
+                    .copied()
+                    .find(|&cid| eq_ci(tree.name_u16(cid), seg));
+                if let Some(f) = found {
+                    cur = f;
+                } else {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok {
+                return Some(cur);
+            }
+        }
+    }
+    None
+}
+
+/// Find nodes named `name` anywhere under `start` (any depth).
+#[must_use]
+pub fn find_named(tree: &Tree, start: u32, name: &str, dirs_only: bool) -> Vec<u32> {
+    let mut out = Vec::new();
+    tree.walk(start, |id, n| {
+        if (!dirs_only || n.is_dir()) && eq_ci(tree.name_u16(id), name) {
+            out.push(id);
+        }
+    });
+    out
+}
+
+/// Build-artifact folder names matched unconditionally (spec §6).
+const BUILD_ARTIFACT_NAMES: [&str; 8] = [
+    "build",
+    ".build",
+    "dist",
+    ".next",
+    ".turbo",
+    ".parcel-cache",
+    "__pycache__",
+    ".gradle",
+];
+
+/// Collect build-artifact folder ids under `start`, applying the
+/// sibling-ruled `target`/`bin`/`obj` rules from spec §6.
+#[must_use]
+pub fn find_build_artifacts(tree: &Tree, start: u32) -> Vec<u32> {
+    let mut out = Vec::new();
+    tree.walk(start, |id, n| {
+        if !n.is_dir() || n.is_removed() {
+            return;
+        }
+        let name = tree.name_u16(id);
+        if BUILD_ARTIFACT_NAMES.iter().any(|&f| eq_ci(name, f)) {
+            out.push(id);
+            return;
+        }
+        // Sibling-ruled names: target / bin / obj.
+        let parent = n.parent;
+        if parent != u32::MAX {
+            let siblings: Vec<Vec<u16>> = tree
+                .children_sorted(parent)
+                .iter()
+                .map(|&sid| tree.name_u16(sid).to_vec())
+                .collect();
+            if build_artifact_with_sibling(name, &siblings) {
+                out.push(id);
+            }
+        }
+    });
+    out
+}
+
+/// Large media: video/audio/image files ≥ 10 MB (logical size, spec §6).
+#[must_use]
+pub fn find_large_media(tree: &Tree, start: u32) -> Vec<u32> {
+    const MIN: u64 = 10 * 1024 * 1024;
+    use crate::scan::categories::FileCategory as FC;
+    let mut out = Vec::new();
+    tree.walk(start, |id, n| {
+        if !n.is_dir() && n.logical >= MIN && !n.is_cloud_placeholder() && !n.is_removed() {
+            matches!(n.category(), FC::Video | FC::Audio | FC::Image).then(|| out.push(id));
+        }
+    });
+    out
+}
+
+fn has_ext_ci(name: &[u16], ext: &str) -> bool {
+    let n = String::from_utf16_lossy(name).to_ascii_lowercase();
+    n.ends_with(&format!(".{ext}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scan::node::{BatchEntry, Node};
+    use crate::scan::rollup;
+
+    fn u16s(s: &str) -> Vec<u16> {
+        s.encode_utf16().collect()
+    }
+
+    fn build() -> Tree {
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "C:\\Users\\z");
+        // ids: 1 Downloads, 2 AppData, 3 proj, 4 Videos
+        t.append_batch(
+            0,
+            vec![dir("Downloads"), dir("AppData"), dir("proj"), dir("Videos")],
+        );
+        // ids: 5 old.zip, 6 movie.mkv
+        t.append_batch(
+            1,
+            vec![
+                file("old.zip", 500, 500, 1),
+                file("movie.mkv", 20 * 1024 * 1024, 20 * 1024 * 1024, 2),
+            ],
+        );
+        // AppData(2) → Local(7)
+        t.append_batch(2, vec![dir("Local")]);
+        // Local(7) → Temp(8)
+        t.append_batch(7, vec![dir("Temp")]);
+        // Temp(8) → junk.tmp(9)
+        t.append_batch(8, vec![file("junk.tmp", 100, 100, 3)]);
+        // proj(3) → node_modules(10), target(11), Cargo.toml(12), main.rs(13)
+        t.append_batch(
+            3,
+            vec![
+                dir("node_modules"),
+                dir("target"),
+                file("Cargo.toml", 10, 10, 1),
+                file("main.rs", 10, 10, 1),
+            ],
+        );
+        // node_modules(10) → lib.rlib(14)
+        t.append_batch(10, vec![file("lib.rlib", 900, 900, 1)]);
+        // Videos(4) → tiny.txt(15)
+        t.append_batch(4, vec![file("tiny.txt", 5, 5, 1)]);
+        rollup::finalize(&mut t);
+        t
+    }
+
+    fn dir(name: &str) -> BatchEntry {
+        let mut node = Node::new_dir();
+        node.modified = 1;
+        BatchEntry {
+            name: u16s(name),
+            node,
+        }
+    }
+
+    fn file(name: &str, logical: u64, on_disk: u64, modified: i64) -> BatchEntry {
+        let mut node = Node::new_file();
+        node.logical = logical;
+        node.on_disk = on_disk;
+        node.modified = modified;
+        node.set_category(crate::scan::categories::FileCategory::from_name(&u16s(
+            name,
+        )));
+        BatchEntry {
+            name: u16s(name),
+            node,
+        }
+    }
+
+    fn env_roots() -> std::collections::HashMap<String, String> {
+        let mut m = std::collections::HashMap::new();
+        // The test tree is windows-shaped; the mac pattern table keys on
+        // %HOME% which maps to the same profile root, so both platform
+        // tables resolve against this fixture.
+        m.insert("USERPROFILE".to_string(), "C:\\Users\\z".to_string());
+        m.insert("HOME".to_string(), "C:\\Users\\z".to_string());
+        m.insert(
+            "LOCALAPPDATA".to_string(),
+            "C:\\Users\\z\\AppData\\Local".to_string(),
+        );
+        m
+    }
+
+    #[test]
+    fn downloads_and_temp_resolve() {
+        let t = build();
+        let cats = resolve(&t, &env_roots(), 1);
+        let get = |id: &str| cats.iter().find(|c| c.id == id);
+        let dl = get("downloads").expect("downloads row");
+        assert_eq!(dl.items, vec![1]);
+        // The fixture is windows-shaped: the Windows table resolves its
+        // Temp row here; the macOS table's cache roots (~/Library/Caches)
+        // legitimately do not exist in it, so that assert is windows-only
+        // (the mac table's downloads row resolves identically above).
+        if cfg!(target_os = "macos") {
+            assert!(get("temp_caches").is_none(), "no Library/Caches in fixture");
+        } else {
+            let tc = get("temp_caches").expect("temp row");
+            assert!(!tc.items.is_empty());
+            assert!(tc.items.contains(&8));
+        }
+    }
+
+    #[test]
+    fn node_modules_and_target_with_sibling() {
+        let t = build();
+        let cats = resolve(&t, &env_roots(), 1);
+        let nm = cats.iter().find(|c| c.id == "node_modules").unwrap();
+        assert_eq!(nm.items, vec![10]);
+        let ba = cats.iter().find(|c| c.id == "build_artifacts").unwrap();
+        assert!(ba.items.contains(&11), "target with sibling Cargo.toml");
+    }
+
+    #[test]
+    fn large_media_minimum() {
+        let t = build();
+        let cats = resolve(&t, &env_roots(), 1);
+        let lm = cats.iter().find(|c| c.id == "large_media").unwrap();
+        assert_eq!(lm.items, vec![6]); // 20 MB mkv only
+    }
+
+    #[test]
+    fn review_only_rows_flagged() {
+        let t = build();
+        let cats = resolve(&t, &env_roots(), 1);
+        for c in &cats {
+            if c.id == "vm_disks" || c.id == "windows_old" {
+                assert!(c.review_only, "{} must be review-only", c.id);
+            }
+        }
+    }
+
+    #[test]
+    fn match_pattern_expands_wildcards() {
+        let t = build();
+        let m = match_pattern(&t, "C:\\Users\\z\\AppData\\Local", &["Temp"]);
+        assert!(m.contains(&8));
+        let bad = match_pattern(&t, "C:\\Does\\Not\\Exist", &["Temp"]);
+        assert!(bad.is_empty());
+    }
+}

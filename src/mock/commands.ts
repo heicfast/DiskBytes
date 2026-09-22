@@ -1,0 +1,703 @@
+/**
+ * Mock command registry (DEV/TEST ONLY): implements the full Tauri
+ * command surface against the synthetic tree so the UI runs in a plain
+ * browser. Used by Playwright/agent-browser screenshot passes; NEVER
+ * bundled into production (gated on isTauri()=false + DEV in main.tsx).
+ */
+import { emitMockEvent, setMockBackend } from "../lib/ipc";
+import { buildLayout, encodeLayout } from "./layouts";
+import { CATEGORY_COLORS, CATEGORY_LABELS, MockTree, type MockNode } from "./tree";
+
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const DAY = 86400;
+const NOW = Math.floor(Date.now() / 1000);
+
+let tree = new MockTree();
+let scanning = false;
+let scanTicker: number | null = null;
+/** The sticky last-done record (mirrors the Rust DoneRecord — the
+ *  store's reconcile reads it back through get_status). */
+let lastDone: { generation: number; stats: [number, number, number, number] | null; error: string | null } | null = null;
+let monitorTicker: number | null = null;
+const snapshots: { id: string; root: string; takenAt: number; total: number; folders: number; map: Map<string, number> }[] = [];
+let license = { posture: "unlicensed", isPro: false, tier: "", graceDaysLeft: 0, freeCommitCap: 1 * GB };
+let lastScanRoot = 0;
+void 0;
+
+const fmtPath = (id: number): string => tree.pathOf(id);
+
+function nodeDetails(id: number): Record<string, unknown> {
+  const n = tree.nodes[id];
+  const agg = tree.aggregate(id);
+  const parent = tree.nodes[n.parent];
+  const stats = tree.stats(id);
+  const largest = n.children
+    .slice(0, 10)
+    .map((c) => {
+      const cn = tree.nodes[c];
+      return { id: c, name: cn.name, size: cn.onDisk || cn.logical, isDir: cn.isDir };
+    });
+  const domCat = tree.dominantCategory(id);
+  return {
+    id,
+    name: n.name,
+    isDir: n.isDir,
+    kind: n.isDir ? "Folder" : CATEGORY_LABELS[n.category],
+    kindColor: CATEGORY_COLORS[n.isDir ? domCat : n.category],
+    path: fmtPath(id),
+    size: stats.onDisk,
+    shareOfScan: stats.onDisk / (tree.nodes[lastScanRoot].onDisk || 1),
+    logical: stats.logical,
+    overhead: Math.max(0, stats.onDisk - stats.logical),
+    savings: Math.max(0, stats.logical - stats.onDisk),
+    files: agg.files,
+    folders: agg.folders,
+    ofParent: parent ? stats.onDisk / (parent.onDisk || 1) : 1,
+    modified: n.modified,
+    created: n.created,
+    isCloud: n.cloud,
+    isProtected: n.protected,
+    largest,
+  };
+}
+
+function startScan(_target: string, _turbo: boolean): number {
+  if (scanTicker !== null) window.clearInterval(scanTicker);
+  scanning = true;
+  const generation = tree.generation + 1;
+  tree.generation = generation;
+  lastScanRoot = 0;
+  // Dev-only race harness: ?fastscan=1 completes the scan on the FIRST
+  // SYNCHRONOUS tick (inside start_scan, before the invoke resolves) —
+  // reproducing the tiny-tree timing the CI screenshot tours exposed
+  // (scan-done fired while the store still held the old generation).
+  const fastScan = new URLSearchParams(location.search).get("fastscan") === "1";
+  const totalFiles = fastScan ? 1 : 1600;
+  let files = 0;
+  const started = performance.now();
+  const tick = () => {
+    files = Math.min(totalFiles, files + (fastScan ? totalFiles : Math.round(totalFiles / 16)));
+    emitMockEvent("scan-progress", {
+      generation,
+      progress: {
+        files,
+        folders: Math.round(files / 6),
+        bytes: Math.round(files * 41.2 * MB),
+        currentPath: fmtPath(tree.nodes[Math.floor(Math.random() * tree.nodes.length)].id),
+        denied: 3,
+        deniedSamples: tree.denied.samples,
+      },
+    });
+    if (files >= totalFiles) {
+      if (scanTicker !== null) window.clearInterval(scanTicker);
+      scanTicker = null;
+      void started;
+      scanning = false;
+      const st = tree.stats(0);
+      lastDone = {
+        generation,
+        stats: [st.logical, st.onDisk, st.files, st.folders],
+        error: null,
+      };
+      emitMockEvent("scan-done", {
+        generation,
+        stats: [st.logical, st.onDisk, st.files, st.folders],
+        error: null,
+      });
+    }
+  };
+  tick();
+  scanTicker = window.setInterval(tick, 170);
+  return generation;
+}
+
+let monitorBase: Record<string, number> = {};
+
+function monitorSample(): Record<string, unknown> {
+  const dt = 2000;
+  const cpu = 14 + Math.random() * 30;
+  const total = 32 * GB;
+  const avail = 9.5 * GB + Math.random() * GB;
+  const procNames = [
+    "explorer.exe", "chrome.exe", "Code.exe", "cargo.exe", "rust-analyzer.exe",
+    "Discord.exe", "Spotify.exe", "SearchIndexer.exe", "MsMpEng.exe", "dwm.exe",
+    "System", "svchost.exe", "python.exe", "node.exe", "VRChat.exe",
+  ];
+  const procs = procNames.map((name, i) => ({
+    pid: 1000 + i * 37,
+    name,
+    cpuPct: Math.max(0, (cpu / procNames.length) * (2 - i / procNames.length) * (0.4 + Math.random())),
+    ws: Math.round((620 - i * 36) * MB * (0.6 + Math.random() * 0.8)),
+  }));
+  monitorBase.in = (monitorBase.in ?? 0) + 2.2 * MB + Math.random() * MB;
+  monitorBase.out = (monitorBase.out ?? 0) + 0.4 * MB + Math.random() * 0.2 * MB;
+  return {
+    dtMs: dt,
+    cpuUserPct: cpu * 0.62,
+    cpuSystemPct: cpu * 0.38,
+    cpuTotalPct: cpu,
+    threads: 1840 + Math.round(Math.random() * 300),
+    processes: 214 + Math.round(Math.random() * 30),
+    memTotal: total,
+    memAvailable: avail,
+    kernelPaged: 380 * MB,
+    kernelNonpaged: 96 * MB,
+    systemCache: 2.1 * GB,
+    commitTotal: 26.4 * GB,
+    commitLimit: 48.6 * GB,
+    compressed: 2.8 * GB,
+    netDownBps: 2.2 * MB,
+    netUpBps: 0.4 * MB,
+    sessionIn: monitorBase.in,
+    sessionOut: monitorBase.out,
+    volumes: [
+      { root: "C:\\", label: "Local Disk", total: 512 * GB, free: 61.4 * GB },
+      { root: "D:\\", label: "Games", total: 2048 * GB, free: 812 * GB },
+      { root: "E:\\", label: "REMOVABLE", total: 64 * GB, free: 12 * GB },
+    ],
+    procs,
+    totalProcs: 214,
+  };
+}
+
+const DUPES = [
+  {
+    id: 1,
+    paths: [
+      "C:\\Users\\dev\\Pictures\\Camera Roll\\photo-402.jpg",
+      "C:\\Users\\dev\\Pictures\\photo-402.jpg",
+      "C:\\Users\\dev\\Downloads\\photo-402 (1).jpg",
+    ],
+    size: 24 * MB,
+    count: 3,
+    wasted: 48 * MB,
+  },
+  {
+    id: 2,
+    paths: [
+      "C:\\Users\\dev\\Documents\\report-233.pdf",
+      "C:\\Users\\dev\\Documents\\Work\\report-233.pdf",
+    ],
+    size: 8.4 * MB,
+    count: 2,
+    wasted: 8.4 * MB,
+  },
+  {
+    id: 3,
+    paths: [
+      "C:\\Users\\dev\\Videos\\render-102.mp4",
+      "C:\\Users\\dev\\Videos\\render-102 copy.mp4",
+      "C:\\Users\\dev\\Downloads\\render-102.mp4",
+      "D:\\Backups\\render-102.mp4",
+    ],
+    size: 1.1 * GB,
+    count: 4,
+    wasted: 3.3 * GB,
+  },
+];
+
+const APPS = [
+  {
+    id: "JetBrains RustRover 2026.1", name: "RustRover", publisher: "JetBrains s.r.o.", version: "2026.1.2",
+    source: "registry", installLocation: "C:\\Program Files\\JetBrains\\RustRover", uninstallString: "C:\\Program Files\\JetBrains\\RustRover\\Uninstall.exe",
+    quietUninstallString: "", packageFullName: "", lastUsed: NOW - 2 * DAY, icon: "",
+    bundleSize: 1.4 * GB, leftovers: [{ label: "Roaming AppData", paths: [{ path: "C:\\Users\\dev\\AppData\\Roaming\\JetBrains\\RustRover2026.1", size: 480 * MB }], size: 480 * MB }],
+    total: 1.4 * GB + 480 * MB,
+  },
+  {
+    id: "Google Chrome", name: "Google Chrome", publisher: "Google LLC", version: "141.0.7390.65",
+    source: "registry", installLocation: "C:\\Program Files\\Google\\Chrome", uninstallString: "C:\\Program Files\\Google\\Chrome\\Application\\141.0.7390.65\\Installer\\setup.exe --uninstall",
+    quietUninstallString: "", packageFullName: "", lastUsed: NOW - 30, icon: "",
+    bundleSize: 612 * MB, leftovers: [], total: 612 * MB,
+  },
+  {
+    id: "Microsoft VS Code", name: "Visual Studio Code", publisher: "Microsoft Corporation", version: "1.102.0",
+    source: "registry", installLocation: "C:\\Program Files\\Microsoft VS Code", uninstallString: "C:\\Program Files\\Microsoft VS Code\\Unins000.exe",
+    quietUninstallString: "", packageFullName: "", lastUsed: NOW - 60, icon: "",
+    bundleSize: 420 * MB, leftovers: [
+      { label: "Roaming AppData", paths: [{ path: "C:\\Users\\dev\\AppData\\Roaming\\Code", size: 210 * MB }], size: 210 * MB },
+      { label: "Local AppData", paths: [{ path: "C:\\Users\\dev\\AppData\\Local\\Programs\\VSCode", size: 90 * MB }], size: 90 * MB },
+    ],
+    total: 420 * MB + 300 * MB,
+  },
+  {
+    id: "Spotify", name: "Spotify", publisher: "Spotify AB", version: "1.2.53",
+    source: "msix", installLocation: "", uninstallString: "", quietUninstallString: "",
+    packageFullName: "SpotifyAB.SpotifyMusic_1.2.53_x86__zpdnekdrzrea0", lastUsed: NOW - 6 * 3600, icon: "",
+    bundleSize: 780 * MB, leftovers: [{ label: "Store package data", paths: [{ path: "C:\\Users\\dev\\AppData\\Local\\Packages\\SpotifyAB.SpotifyMusic", size: 1.6 * GB }], size: 1.6 * GB }],
+    total: 780 * MB + 1.6 * GB,
+  },
+];
+
+type Cmd = (args: Record<string, unknown>) => unknown;
+
+const commands: Record<string, Cmd> = {
+  // ── scan lifecycle ────────────────────────────────────────────────
+  get_dev_hooks: () => ({
+    scan: new URLSearchParams(location.search).get("scan") ?? null,
+    mode: new URLSearchParams(location.search).get("mode") ?? null,
+    turbo: false,
+    verify: false,
+    tour: new URLSearchParams(location.search).get("tour") === "1",
+  }),
+  get_status: () => ({
+    generation: tree.generation,
+    scanning,
+    hasTree: true,
+    progress: { files: 1600, folders: 266, bytes: 66 * GB, currentPath: "", denied: 3, deniedSamples: tree.denied.samples },
+    lastDone,
+  }),
+  start_scan: (a) => startScan(String(a.target), false),
+  start_scan_turbo: (a) => startScan(String(a.target), true),
+  get_drive_chips: () => [{ letter: "C:", target: "C:\\" }, { letter: "D:", target: "D:\\" }],
+  get_home_path: () => "C:\\Users\\dev",
+  disk_storage: () => ({ label: "Local Disk", total: 512 * GB, used: 450.6 * GB, free: 61.4 * GB, usedPct: 0.880 }),
+  is_elevated: () => true,
+  restart_as_admin: () => null,
+  open_recycle_bin: () => null,
+  open_url: () => null,
+  copy_path: (a) => {
+    console.info("[mock] copy_path", a);
+    return null;
+  },
+  open_node: (a) => {
+    console.info("[mock] open_node", a);
+    return null;
+  },
+  reveal_in_explorer: (a) => {
+    console.info("[mock] reveal_in_explorer", a);
+    return null;
+  },
+
+  // ── sidebar data ──────────────────────────────────────────────────
+  quick_wins: () => {
+    const find = (pred: (n: MockNode) => boolean): { node: number; v: number } | null => {
+      let best: { node: number; v: number } | null = null;
+      for (let i = 1; i < tree.nodes.length; i++) {
+        const n = tree.nodes[i];
+        if (n.isDir && pred(n)) {
+          const v = n.onDisk || n.logical;
+          if (!best || v > best.v) best = { node: i, v };
+        }
+      }
+      return best;
+    };
+    const rows: Record<string, unknown>[] = [
+      { id: "downloads", title: "Downloads", icon: "archive", count: 33, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
+      { id: "caches", title: "Temp & caches", icon: "refresh", count: 83, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
+      { id: "large-media", title: "Large media", icon: "image", count: 12, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
+      { id: "node-modules", title: "node_modules", icon: "box", count: 208, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
+      { id: "build-artifacts", title: "Build artifacts", icon: "package", count: 95, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
+      { id: "dev-caches", title: "Developer caches", icon: "code", count: 92, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
+      { id: "vm-disks", title: "VM disks", icon: "app", count: 2, size: 30.4 * GB, reviewOnly: true, extra: "Deleting a VM disk destroys its data", biggestMatch: null },
+    ];
+    // attach sizes from the tree where possible
+    const nm = find((n) => n.name === "node_modules");
+    if (nm) rows[3].size = nm.v, rows[3].biggestMatch = nm.node;
+    const temp = find((n) => n.name === "Temp");
+    if (temp) rows[1].size = Math.round(temp.v * 1.8), rows[1].biggestMatch = temp.node;
+    const target = find((n) => n.name === "target");
+    if (target) rows[4].size = target.v, rows[4].biggestMatch = target.node;
+    const reg = find((n) => n.name === "registry");
+    if (reg) rows[5].size = Math.round(reg.v * 1.4), rows[5].biggestMatch = reg.node;
+    rows[0].size = 0; // downloads sum below
+    let dl = 0;
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if (!n.isDir && n.parent > 0 && tree.nodes[n.parent].name === "Downloads") dl += n.logical;
+    }
+    rows[0].size = dl;
+    let media = 0;
+    let mc = 0;
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if (!n.isDir && (n.category === 0 || n.category === 1 || n.category === 2) && n.logical >= 10 * MB) {
+        media += n.logical;
+        mc++;
+      }
+    }
+    rows[2].size = media;
+    rows[2].count = mc;
+    return rows;
+  },
+  quick_win_items: (a) => {
+    const id = String(a.id);
+    const out: { id: number; path: string; size: number; reason: string }[] = [];
+    const match: Record<string, (n: MockNode) => boolean> = {
+      "node-modules": (n) => n.name === "node_modules",
+      "vm-disks": (n) => !n.isDir && (n.name.endsWith(".vdi") || n.name.endsWith(".vmdk")),
+    };
+    const pred = match[id] ?? (() => false);
+    for (let i = 1; i < tree.nodes.length && out.length < 400; i++) {
+      const n = tree.nodes[i];
+      if (pred(n)) out.push({ id: i, path: fmtPath(i), size: n.onDisk || n.logical, reason: "Quick win" });
+    }
+    return out;
+  },
+  file_types: () => {
+    const sizes = new Array(9).fill(0);
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if (!n.isDir) sizes[n.category] += n.logical;
+    }
+    return sizes
+      .map((size, i) => ({ label: CATEGORY_LABELS[i], color: CATEGORY_COLORS[i], size }))
+      .filter((s) => s.size > 0)
+      .sort((a, b) => b.size - a.size);
+  },
+
+  // ── explore data ──────────────────────────────────────────────────
+  get_folder_view: (a) => {
+    const node = Number(a.node);
+    const filter = (a.filter as string | null) ?? "";
+    const n = tree.nodes[node];
+    const folders = n.children
+      .filter((c) => tree.nodes[c].isDir)
+      .filter((c) => !filter || tree.nodes[c].name.toLowerCase().includes(filter.toLowerCase()))
+      .slice(0, 24)
+      .map((c) => {
+        const cn = tree.nodes[c];
+        const cats = tree.topCategories(c, 3);
+        return {
+          id: c,
+          name: cn.name,
+          size: cn.onDisk || cn.logical,
+          itemCount: (tree.aggregate(c).files + tree.aggregate(c).folders),
+          fileCount: tree.aggregate(c).files,
+          folderCount: tree.aggregate(c).folders,
+          categories: cats.map((x) => ({ color: CATEGORY_COLORS[x.category], label: CATEGORY_LABELS[x.category], size: x.size })),
+          modified: cn.modified,
+          protected: cn.protected,
+        };
+      });
+    const files = n.children
+      .filter((c) => !tree.nodes[c].isDir)
+      .filter((c) => !filter || tree.nodes[c].name.toLowerCase().includes(filter.toLowerCase()))
+      .slice(0, 12)
+      .map((c) => {
+        const cn = tree.nodes[c];
+        return {
+          id: c,
+          name: cn.name,
+          size: cn.onDisk || cn.logical,
+          category: CATEGORY_LABELS[cn.category],
+          categoryColor: CATEGORY_COLORS[cn.category],
+          modified: cn.modified,
+          protected: cn.protected,
+          cloud: cn.cloud,
+        };
+      });
+    const st = tree.stats(node);
+    return {
+      generation: tree.generation,
+      node,
+      name: node === 0 ? "This PC" : n.name,
+      size: st.onDisk,
+      fileCount: st.files,
+      folderCount: st.folders,
+      folders,
+      files,
+      filesCapped: files.length >= 12,
+    };
+  },
+  node_details: (a) => nodeDetails(Number(a.id)),
+  hover_details: (a) => {
+    const id = Number(a.id);
+    const n = tree.nodes[id];
+    return {
+      id,
+      name: n.name,
+      isDir: n.isDir,
+      size: n.onDisk || n.logical,
+      shareOfScan: (n.onDisk || n.logical) / (tree.nodes[lastScanRoot || 0].onDisk || 1),
+      fileCount: n.isDir ? tree.aggregate(id).files : 1,
+      isCloud: n.cloud,
+      isProtected: n.protected,
+      category: n.isDir ? "Folder" : CATEGORY_LABELS[n.category],
+      categoryColor: CATEGORY_COLORS[n.isDir ? 8 : n.category],
+    };
+  },
+  top_sizes: (a) => {
+    const node = Number(a.node);
+    const scope = String(a.scope);
+    const filter = (a.filter as string | null) ?? "";
+    let rows: { id: number; name: string; parentPath: string; size: number; kind: string; isDir: boolean; share: number; color: number }[] = [];
+    const st = tree.stats(node);
+    if (scope === "in-folder") {
+      rows = tree.nodes[node].children.map((c) => {
+        const cn = tree.nodes[c];
+        return {
+          id: c, name: cn.name, parentPath: fmtPath(node), size: cn.onDisk || cn.logical,
+          kind: cn.isDir ? "Folder" : CATEGORY_LABELS[cn.category], isDir: cn.isDir,
+          share: (cn.onDisk || cn.logical) / (st.onDisk || 1),
+          color: CATEGORY_COLORS[cn.isDir ? 8 : cn.category],
+        };
+      });
+    } else if (scope === "files-anywhere") {
+      rows = tree.filesAnywhere(node, 200).map((f) => ({
+        id: f.id, name: f.node.name, parentPath: fmtPath(tree.nodes[f.id].parent), size: f.node.logical,
+        kind: CATEGORY_LABELS[f.node.category], isDir: false,
+        share: f.node.logical / (st.onDisk || 1), color: CATEGORY_COLORS[f.node.category],
+      }));
+    } else {
+      rows = tree.foldersAnywhere(node, 200).map((f) => ({
+        id: f.id, name: f.node.name, parentPath: fmtPath(tree.nodes[f.id].parent), size: f.node.onDisk,
+        kind: "Folder", isDir: true, share: f.node.onDisk / (st.onDisk || 1), color: CATEGORY_COLORS[8],
+      }));
+    }
+    if (filter) rows = rows.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()));
+    return { generation: tree.generation, node, scope, rows, total: st.onDisk };
+  },
+  age_map: (a) => {
+    const node = Number(a.node);
+    const buckets = new Array(6).fill(0);
+    const now = NOW;
+    const monthMap = new Map<string, number>();
+    const big: { id: number; name: string; path: string; logical: number; onDisk: number; modified: number; protected: boolean }[] = [];
+    for (const d of tree.allDescendants(node)) {
+      const n = tree.nodes[d];
+      if (n.isDir) continue;
+      const b = ageBucketOf(n.modified, now);
+      buckets[b] += n.logical;
+      const dt = new Date(n.modified * 1000);
+      const key = `${dt.getUTCFullYear()}-${dt.getUTCMonth()}`;
+      monthMap.set(key, (monthMap.get(key) ?? 0) + n.logical);
+      if (n.logical >= 40 * MB && now - n.modified > 365 * DAY && !n.cloud) {
+        big.push({ id: d, name: n.name, path: fmtPath(d), logical: n.logical, onDisk: n.onDisk, modified: n.modified, protected: n.protected });
+      }
+    }
+    big.sort((x, y) => y.logical - x.logical);
+    const years = [...new Set([...monthMap.keys()].map((k) => Number(k.split("-")[0])))].sort();
+    const firstYear = years.length ? Math.max(years[0], 2021) : 2024;
+    const lastYear = years.length ? Math.min(years[years.length - 1], 2026) : 2026;
+    const bytes: number[] = [];
+    let max = 0;
+    let busiest: [number, number] | null = null;
+    for (let y = firstYear; y <= lastYear; y++) {
+      for (let m = 0; m < 12; m++) {
+        const v = monthMap.get(`${y}-${m}`) ?? 0;
+        bytes.push(v);
+        if (v > max) {
+          max = v;
+          busiest = [y, m];
+        }
+      }
+    }
+    return {
+      generation: tree.generation,
+      node,
+      buckets,
+      bucketLabels: ["Last 7 days", "8–30 days", "1–3 months", "3–12 months", "1–2 years", "Over 2 years"],
+      total: buckets.reduce((x, y) => x + y, 0),
+      heatmap: { firstYear, lastYear, bytes, max, busiest },
+      big: big.slice(0, 60),
+    };
+  },
+  list_children: (a) => {
+    const node = Number(a.node);
+    const filter = (a.filter as string | null) ?? "";
+    const st = tree.stats(node);
+    const rows = tree.nodes[node].children
+      .filter((c) => !filter || tree.nodes[c].name.toLowerCase().includes(filter.toLowerCase()))
+      .slice(0, 200)
+      .map((c) => {
+        const cn = tree.nodes[c];
+        return {
+          id: c, name: cn.name, isDir: cn.isDir, hasChildren: cn.children.length > 0,
+          share: (cn.onDisk || cn.logical) / (st.onDisk || 1), size: cn.onDisk || cn.logical,
+          category: cn.isDir ? "Folder" : CATEGORY_LABELS[cn.category],
+          color: CATEGORY_COLORS[cn.isDir ? 8 : cn.category],
+          protected: cn.protected, cloud: cn.cloud, modified: cn.modified,
+        };
+      });
+    return rows;
+  },
+  get_breadcrumb: (a) => {
+    const chain: { id: number; name: string; size: number }[] = [];
+    let cur = Number(a.node);
+    const ids: number[] = [];
+    while (cur >= 0 && cur !== 0) {
+      ids.unshift(cur);
+      cur = tree.nodes[cur].parent;
+    }
+    for (const id of ids) {
+      chain.push({ id, name: tree.nodes[id].name, size: tree.nodes[id].onDisk || tree.nodes[id].logical });
+    }
+    if (chain.length === 0) chain.push({ id: 0, name: "This PC", size: tree.nodes[0].onDisk });
+    return chain;
+  },
+  get_names: (a) => (a.ids as number[]).map((id) => tree.nodes[id]?.name ?? "?"),
+  get_layout: (a) => {
+    const req = a.req as Record<string, unknown>;
+    const result = buildLayout(
+      tree,
+      Number(req.node),
+      String(req.mode),
+      Number(req.width),
+      Number(req.height),
+      Number(req.depth),
+      String(req.color),
+    );
+    return encodeLayout(result.meta, result.cells);
+  },
+  preview_text: () => ({ text: "The quick brown fox jumps over the lazy dog.\n".repeat(40), truncated: false, read: 1120 }),
+
+  // ── cleanup ───────────────────────────────────────────────────────
+  commit_cleanup: (a) => {
+    const items = (a.items ?? []) as { id: number; path: string; size: number }[];
+    const ids = items.map((i) => i.id).filter((id) => id > 0 && id < tree.nodes.length && !tree.nodes[id].protected);
+    const failed = items
+      .filter((i) => i.id > 0 && tree.nodes[i.id]?.protected)
+      .map((i) => ({ path: i.path, reason: "Windows manages this item" }));
+    tree.removeSubtrees(ids);
+    const st = tree.stats(0);
+    const result = {
+      generation: tree.generation,
+      trashed: ids.map((id) => ({ path: fmtPath(id), alreadyGone: false, nested: false })),
+      failed,
+      stats: [st.logical, st.onDisk, st.files, st.folders],
+      currentFolder: 0,
+      selectedNode: null,
+    };
+    window.setTimeout(() => {
+      emitMockEvent("cleanup-committed", result);
+    }, 60);
+    return result;
+  },
+
+  // ── duplicates ────────────────────────────────────────────────────
+  find_duplicates: () => ({
+    generation: tree.generation,
+    groups: DUPES,
+    wastedTotal: DUPES.reduce((s, g) => s + g.wasted, 0),
+    files: 3821,
+  }),
+
+  // ── applications ──────────────────────────────────────────────────
+  list_applications: () => APPS,
+  uninstall_app: (a) => {
+    console.info("[mock] uninstall_app", a);
+    return { ok: true, leftovers: [] };
+  },
+
+  // ── monitor ───────────────────────────────────────────────────────
+  monitor_start: () => {
+    if (monitorTicker !== null) return null;
+    monitorTicker = window.setInterval(() => {
+      emitMockEvent("monitor-sample", monitorSample());
+    }, 2000);
+    emitMockEvent("monitor-sample", monitorSample());
+    return null;
+  },
+  monitor_stop: () => {
+    if (monitorTicker !== null) window.clearInterval(monitorTicker);
+    monitorTicker = null;
+    return null;
+  },
+
+  // ── snapshots ─────────────────────────────────────────────────────
+  take_snapshot: (a) => {
+    const node = Number(a.node ?? 0);
+    const map = new Map<string, number>();
+    for (const d of tree.allDescendants(node)) {
+      const n = tree.nodes[d];
+      if (n.isDir && (n.onDisk || n.logical) >= 1 * MB) map.set(fmtPath(d).toLowerCase(), n.onDisk || n.logical);
+    }
+    const st = tree.stats(node);
+    const snap = {
+      id: `snap-${Date.now().toString(36)}`,
+      root: fmtPath(node),
+      takenAt: NOW,
+      total: st.onDisk,
+      folders: map.size,
+      map,
+    };
+    snapshots.push(snap);
+    return { id: snap.id };
+  },
+  list_snapshots: () =>
+    snapshots.map((s) => ({ id: s.id, root: s.root, takenAt: s.takenAt, total: s.total, folders: s.folders })),
+  delete_snapshot: (a) => {
+    const i = snapshots.findIndex((s) => s.id === String(a.id));
+    if (i >= 0) snapshots.splice(i, 1);
+    return null;
+  },
+  diff_snapshots: (a) => {
+    const before = snapshots.find((s) => s.id === String(a.beforeId));
+    const after = snapshots.find((s) => s.id === String(a.afterId));
+    if (!before || !after) throw new Error("snapshot not found");
+    const keys = new Set([...before.map.keys(), ...after.map.keys()]);
+    const changes = [...keys]
+      .map((path) => {
+        const b = before.map.get(path) ?? 0;
+        const af = after.map.get(path) ?? 0;
+        return { path, before: b, after: af, delta: af - b };
+      })
+      .filter((c) => c.delta !== 0)
+      .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))
+      .slice(0, 200);
+    return { sameRoot: before.root === after.root, totalBefore: before.total, totalAfter: after.total, changes };
+  },
+
+  // ── license ───────────────────────────────────────────────────────
+  license_status: () => license,
+  activate_license: (a) => {
+    const key = String(a.key ?? a.licenseKey ?? "").trim();
+    if (key.length < 8) {
+      throw "That license key doesn't look right — check it and try again.";
+    }
+    license = { posture: "pro", isPro: true, tier: "pro-yearly", graceDaysLeft: 0, freeCommitCap: 1 * GB };
+    window.setTimeout(() => {
+      emitMockEvent("license-changed", license);
+    }, 40);
+    return license;
+  },
+  deactivate_license: () => {
+    license = { posture: "unlicensed", isPro: false, tier: "", graceDaysLeft: 0, freeCommitCap: 1 * GB };
+    window.setTimeout(() => {
+      emitMockEvent("license-changed", license);
+    }, 40);
+    return license;
+  },
+  validate_now: () => license,
+  analytics_opt_out: () => false,
+  set_analytics_opt_out: () => null,
+};
+
+function ageBucketOf(modified: number, now: number): number {
+  const days = (now - modified) / 86400;
+  if (days <= 7) return 0;
+  if (days <= 30) return 1;
+  if (days <= 91) return 2;
+  if (days <= 365) return 3;
+  if (days <= 730) return 4;
+  return 5;
+}
+
+/** Install the mock backend (browser dev/test mode). */
+export function installMock(): void {
+  setMockBackend(async (cmd, args) => {
+    const handler = commands[cmd];
+    if (!handler) {
+      throw `mock: unknown command ${cmd}`;
+    }
+    // Simulate the async IPC boundary.
+    await new Promise((r) => window.setTimeout(r, 4 + Math.random() * 18));
+    const out = handler(args ?? {});
+    if (out instanceof ArrayBuffer) return out;
+    return out;
+  });
+  // Expose test-driving hooks (Playwright / agent-browser).
+  (window as unknown as Record<string, unknown>).__dbMock = {
+    tree: () => tree,
+    rescan: (target = "ThisPC") => startScan(target, false),
+    setLicense: (p: string) => {
+      license = { ...license, posture: p, isPro: p === "pro" || p === "grace", graceDaysLeft: p === "grace" ? 9 : 0 };
+      emitMockEvent("license-changed", license);
+    },
+    reset: () => {
+      tree = new MockTree();
+    },
+  };
+}

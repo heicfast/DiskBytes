@@ -1,0 +1,182 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * Base — reset, typography, focus, scrollbars, press states.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  letter-spacing: 0;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Focus-visible rings on every interactive element (doc 05 §5) */
+button:focus-visible,
+input:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible) {
+  outline: none;
+}
+
+::selection {
+  background: var(--ink-soft);
+}
+
+/* Scrollbars — slim, theme-aware */
+.db-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.db-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.db-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.db-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
+.db-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* Pressable — shared active feedback (scale 0.985 / opacity 0.75) */
+.db-ink-button:active,
+.db-outline:active,
+.db-cleanup:active,
+.db-folder-card:active,
+.db-queue-button:active,
+.db-icon-button:active,
+.db-mode-picker button:active,
+.db-segmented button:active,
+.db-quick-list button:active,
+.db-file-row:active,
+.db-ranked button:active,
+.db-list-row:active,
+.db-chip:active,
+.db-tabcaps button:active {
+  transform: scale(var(--press-scale));
+  opacity: var(--press-opacity);
+}
+
+kbd {
+  font: 9px/1 var(--font-mono);
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 2px 5px;
+  color: var(--text-secondary);
+  background: var(--card);
+}
+
+/* Numeric columns everywhere */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Spinner (scanning state, refresh-in-progress) */
+@keyframes db-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.db-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid var(--chip);
+  border-top-color: var(--ink);
+  animation: db-spin 0.8s linear infinite;
+}
+
+/* Shared fade/slide entrance for view bodies */
+@keyframes db-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.db-fade-up {
+  animation: db-fade-up var(--fade) ease both;
+}
+
+@media (forced-colors: active) {
+  button:focus-visible,
+  input:focus-visible,
+  a:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid CanvasText;
+  }
+}
+
+/* Utility truncation with middle-ellipsis for paths */
+.db-mid-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

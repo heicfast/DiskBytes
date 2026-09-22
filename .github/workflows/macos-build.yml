@@ -1,0 +1,122 @@
+name: macOS Build
+
+# The macOS half of the cross-platform release (owner decision:
+# cross-platform doc §4, Option A — the SAME Tauri app + React frontend
+# on macOS with platform-mac behind the Platform seam). Verifies:
+# the app crate compiles on macOS, core tests stay green on a mac host,
+# the .app + .dmg bundle builds, and the real app runs a UI tour over
+# a synthetic file tree with screenshots (owner instruction: "test all
+# in CI, capture screenshots").
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: macos-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Core tests (mac host)
+        run: cargo test --manifest-path src-tauri/core/Cargo.toml
+
+      - name: App crate tests (mac platform module — the getattrlistbulk parser tests)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+        env:
+          CARGO_INCREMENTAL: 0
+
+      - name: App crate compiles on macOS
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+        env:
+          CARGO_INCREMENTAL: 0
+
+      - name: Build the app + dmg
+        run: npx tauri build
+        env:
+          CARGO_INCREMENTAL: 0
+
+      - name: List bundles
+        run: |
+          ls -la src-tauri/target/release/bundle/macos || true
+          ls -la src-tauri/target/release/bundle/dmg || true
+
+      - name: Stage a synthetic file tree
+        shell: bash
+        run: |
+          set -e
+          R="$HOME/diskbytes-test"
+          mkdir -p "$R/Users/dev/Desktop" "$R/Users/dev/Downloads" "$R/Users/dev/Projects/web/node_modules" \
+                   "$R/Users/dev/Library/Caches" "$R/Users/dev/Library/Logs" "$R/Applications/Tools.app/Contents/MacOS"
+          # big sparse files (instant): media + VM images
+          mkfile 2g "$R/Users/dev/Downloads/holiday-4k.mov" 2>/dev/null || dd if=/dev/zero of="$R/Users/dev/Downloads/holiday-4k.mov" bs=1048576 count=2048 status=none
+          mkfile 4g "$R/Users/dev/Downloads/ubuntu.iso" 2>/dev/null || true
+          mkfile 1g "$R/Users/dev/Projects/web/render.mp4" 2>/dev/null || true
+          # medium + small files across categories
+          for i in $(seq 1 24); do head -c $((RANDOM + 4096)) /dev/urandom > "$R/Users/dev/Projects/web/node_modules/chunk-$i.js"; done
+          for i in $(seq 1 18); do head -c $((RANDOM * 2 + 1024)) /dev/urandom > "$R/Users/dev/Desktop/notes-$i.txt"; done
+          for i in $(seq 1 12); do head -c $((RANDOM * 4 + 8192)) /dev/urandom > "$R/Users/dev/Library/Caches/cache-$i.bin"; done
+          for i in $(seq 1 9);  do head -c $((RANDOM + 3072)) /dev/urandom > "$R/Users/dev/Downloads/pic-$i.jpg"; done
+          for i in $(seq 1 8);  do head -c $((RANDOM * 16 + 4096)) /dev/urandom > "$R/Users/dev/Library/Logs/app-$i.log"; done
+          find "$R" | wc -l
+
+      - name: Run the app + capture the tour
+        shell: bash
+        run: |
+          set -e
+          APP="src-tauri/target/release/bundle/macos/DiskBytes.app"
+          OUT="$RUNNER_TEMP/shots"
+          mkdir -p "$OUT"
+          open --env DISKBYTES_SCAN="$HOME/diskbytes-test" \
+               --env DISKBYTES_TOUR=1 \
+               --env DISKBYTES_MODE=Folders \
+               "$APP"
+          # 8 s = LaunchServices launch + first paint + the small scan:
+          # frame 00 lands on the Folders mode (the first tour step) —
+          # 14 s skipped the first three tour steps.
+          sleep 8
+          for i in $(seq 0 25); do
+            sleep 2.6
+            screencapture -x "$OUT/step-$(printf %02d $i).png" || true
+          done
+          osascript -e 'tell application "DiskBytes" to quit' 2>/dev/null || pkill -x DiskBytes || true
+          ls -la "$OUT"
+
+      - name: Upload mac screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: diskbytes-macos-screenshots
+          path: ${{ runner.temp }}/shots
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: diskbytes-macos-dmg
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          retention-days: 14
+          if-no-files-found: warn

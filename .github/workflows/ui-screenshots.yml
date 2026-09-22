@@ -1,0 +1,171 @@
+name: UI Screenshots
+
+# The interactive verification battery (owner instruction, session 005):
+# builds the REAL app (Windows, release, embedded frontend), stages a
+# synthetic file tree, launches with DISKBYTES_SCAN + DISKBYTES_TOUR=1,
+# and captures a screenshot at every tour step (all 9 modes, all tabs,
+# color modes, dark theme, license + cleanup overlays) via GDI
+# CopyFromScreen. Artifacts are pulled and VLM-verified per session.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ui-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Node cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Build the app (release exe, no installer)
+        run: npx tauri build --no-bundle
+        env:
+          CARGO_INCREMENTAL: 0
+
+      - name: Stage a synthetic file tree
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'C:\DiskBytesTest'
+          New-Item -ItemType Directory -Force -Path `
+            "$root\Users\dev\Desktop","$root\Users\dev\Documents\Work\Invoices 2026", `
+            "$root\Users\dev\Downloads","$root\Users\dev\Pictures\Camera Roll","$root\Users\dev\Videos", `
+            "$root\Users\dev\Projects\website-2026\node_modules\react","$root\Users\dev\Projects\scanner\target\debug", `
+            "$root\Users\dev\AppData\Local\Temp","$root\Users\dev\AppData\Local\Google\Chrome\User Data\Default\Cache", `
+            "$root\Program Files\Tools\Widget","$root\Windows\System32\drivers" | Out-Null
+          # Big sparse files (instant on NTFS): media + VM images + pagefile-like
+          fsutil file createnew "$root\Users\dev\Videos\holiday-4k.mp4" 2684354560
+          fsutil file createnew "$root\Users\dev\Videos\render-final.mp4" 1288490188
+          fsutil file createnew "$root\Users\dev\Downloads\ubuntu-26.04.iso" 4294967296
+          fsutil file createnew "$root\Users\dev\Downloads\backup-2026.qcow2" 3221225472
+          fsutil file createnew "$root\Users\dev\Pictures\raw-shoot-001.cr3" 104857600
+          fsutil file createnew "$root\Users\dev\Documents\annual-report.pdf" 47185920
+          fsutil file createnew "$root\pagefile.sys" 4294967296
+          # Medium + small real files across categories
+          1..30 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 4096 -Maximum 2097152)
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\Desktop\notes-$_\_.txt".Replace('\_',''), $bytes)
+          }
+          1..24 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 8192 -Maximum 8388608)
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\Projects\website-2026\node_modules\react\chunk-$_\.js".Replace('\.','.'), $bytes)
+          }
+          1..18 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 1024 -Maximum 1048576)
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\AppData\Local\Temp\tmp-$_\ .log".Replace('\ ','.log'), $bytes)
+          }
+          1..12 | ForEach-Object {
+            $bytes = New-Object byte[] 262144
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\AppData\Local\Google\Chrome\User Data\Default\Cache\data_$_", $bytes)
+          }
+          1..10 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 65536 -Maximum 5242880)
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\Documents\Work\Invoices 2026\invoice-2026-$_\ .pdf".Replace('\ ','.pdf'), $bytes)
+          }
+          1..9 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 32768 -Maximum 2097152)
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\Pictures\Camera Roll\IMG_26$_\ .jpg".Replace('\ ','.jpg'), $bytes)
+          }
+          1..14 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 2048 -Maximum 1048576)
+            [System.IO.File]::WriteAllBytes("$root\Program Files\Tools\Widget\tool-$_\ .dll".Replace('\ ','.dll'), $bytes)
+          }
+          1..8 | ForEach-Object {
+            $bytes = New-Object byte[] 5242880
+            [System.IO.File]::WriteAllBytes("$root\Windows\System32\drivers\driver-$_\ .sys".Replace('\ ','.sys'), $bytes)
+          }
+          1..7 | ForEach-Object {
+            $bytes = New-Object byte[] (Get-Random -Minimum 4096 -Maximum 52428800)
+            [System.IO.File]::WriteAllBytes("$root\Users\dev\Projects\scanner\target\debug\scanner-$_\ .exe".Replace('\ ','.exe'), $bytes)
+          }
+          Get-ChildItem -Recurse $root | Measure-Object | ForEach-Object { "staged $($_.Count) entries" }
+
+      - name: Run the app + capture the tour
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -AssemblyName System.Windows.Forms
+          $exe = Join-Path $PWD "src-tauri\target\release\diskbytes.exe"
+          if (-not (Test-Path $exe)) { throw "exe not found: $exe" }
+          $env:DISKBYTES_SCAN = 'C:\DiskBytesTest'
+          $env:DISKBYTES_MODE = 'Folders'
+          $env:DISKBYTES_TOUR = '1'
+          $env:DISKBYTES_POSTHOG_KEY = ''
+          $out = Join-Path $env:RUNNER_TEMP 'shots'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $app = Start-Process -FilePath $exe -WorkingDirectory $PWD -RedirectStandardOutput "$env:RUNNER_TEMP\app-stdout.log" -RedirectStandardError "$env:RUNNER_TEMP\app-stderr.log" -PassThru
+          # bring to front
+          $ws = New-Object -ComObject WScript.Shell
+          $null = $ws.AppActivate($app.Id)
+          # 3 s = WebView2 first paint; the scan completes ~2-3 s later and
+          # the tour starts immediately — frame 00 (at ~5.6 s) lands on the
+          # Folders mode (tour step 0). 6 s still missed it (scan faster
+          # than estimated: 139 files in ~1 s).
+          Start-Sleep -Seconds 3
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $step = 0
+          $max = 26   # ~17 tour steps + margin
+          while ($step -lt $max) {
+            Start-Sleep -Milliseconds 2600
+            if ($app.HasExited) { break }
+            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bmp.Save((Join-Path $out ("step-{0:d2}.png" -f $step)), [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+            $step++
+          }
+          if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          Start-Sleep -Milliseconds 500
+          # Rust panics + tracing land in stderr; the webview console is
+          # not reachable from the harness — these logs make the next
+          # hang/blank diagnosis a download instead of a guess.
+          if (Test-Path "$env:RUNNER_TEMP\app-stderr.log") {
+            "--- app-stderr tail ---"
+            Get-Content "$env:RUNNER_TEMP\app-stderr.log" -Tail 40
+          }
+          Get-ChildItem $out | ForEach-Object { "captured $($_.Name)" }
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: diskbytes-ui-screenshots
+          path: ${{ runner.temp }}/shots
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload app logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: diskbytes-app-logs
+          path: |
+            ${{ runner.temp }}/app-stdout.log
+            ${{ runner.temp }}/app-stderr.log
+          retention-days: 14
+          if-no-files-found: warn

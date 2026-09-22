@@ -1,0 +1,89 @@
+//! App state (spec §4): the finished tree is `Arc<Tree>` behind an
+//! `RwLock`; IPC commands take a read lock. Scan replacement drops the
+//! old `Arc` on a background thread so the UI never stalls freeing a
+//! million nodes. Every tree request carries the scan **generation**.
+
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+
+use diskbytes_core::scan::node::Tree;
+use diskbytes_core::scan::scanner::Progress;
+use parking_lot::{Mutex, RwLock};
+
+/// The live progress sink the scanner updates once per directory batch
+/// (spec §4); the 150 ms ticker and `get_status` read it.
+pub type ProgressSink = Arc<Mutex<Progress>>;
+
+/// Control over the one running scan (starting a new scan cancels the
+/// old — spec §4).
+pub struct ScanHandle {
+    /// The generation this scan writes (kept for `get_status` /
+    /// future cancel-status reporting).
+    #[allow(dead_code)]
+    pub generation: u64,
+    /// Cancel flag shared with the scanner workers.
+    pub cancel: Arc<AtomicBool>,
+    /// The scan thread (joins itself into the state swap; never joined
+    /// from the command layer — cancellation is cooperative).
+    #[allow(dead_code)]
+    pub join: Option<std::thread::JoinHandle<()>>,
+}
+
+/// The sticky outcome of the last COMPLETED scan (not cancellations):
+/// the UI reconciles against it because a `scan-done` event can fire
+/// before the `start_scan` round-trip resolves (tiny trees finish in
+/// milliseconds — the event lands while the store still holds the old
+/// generation and gets dropped as stale). `get_status` replays it.
+#[derive(Debug, Clone, Default)]
+pub struct DoneRecord {
+    /// The generation that finished.
+    pub generation: u64,
+    /// Final stats (logical, onDisk, files, folders).
+    pub stats: Option<(u64, u64, u64, u64)>,
+    /// Terminal error, if the scan failed.
+    pub error: Option<String>,
+}
+
+/// Shared application state managed by Tauri.
+pub struct AppState {
+    /// The finished tree (`None` before the first scan completes).
+    pub tree: RwLock<Option<Arc<Tree>>>,
+    /// Monotonic scan generation (IPC staleness contract).
+    pub generation: AtomicU64,
+    /// The running scan, if any.
+    pub scan: Mutex<Option<ScanHandle>>,
+    /// True from scan start to scan end (any outcome).
+    pub scanning: AtomicBool,
+    /// The live progress snapshot (valid while `scanning`).
+    pub progress: ProgressSink,
+    /// The last completed scan's outcome (see `DoneRecord` — the
+    /// lost-event reconcile path; written by the scan thread before
+    /// the `scan-done` emit, read by `get_status`).
+    pub last_done: Mutex<DoneRecord>,
+}
+
+impl AppState {
+    /// Fresh state at generation 1 (the first scan takes it).
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            tree: RwLock::new(None),
+            generation: AtomicU64::new(1),
+            scan: Mutex::new(None),
+            scanning: AtomicBool::new(false),
+            progress: Arc::new(Mutex::new(Progress::default())),
+            last_done: Mutex::new(DoneRecord::default()),
+        }
+    }
+
+    /// The current generation for request tagging.
+    pub fn current_generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}

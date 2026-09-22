@@ -1,0 +1,47 @@
+[package]
+name = "diskbytes-core"
+version = "0.1.0"
+description = "DiskBytes platform-independent core: node arena, roll-up, categories, layouts, quick-wins, format, age, snapshots, duplicate grouping."
+authors = ["DiskBytes"]
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "diskbytes_core"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+parking_lot = "0.12"
+rayon = "1.10"
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = "allow"
+
+# Domain-justified allows (decision D11, worklog session 003):
+# - cast_possible_truncation / cast_precision_loss / cast_sign_loss:
+#   layout geometry converts byte counts (u64) to f32/f64 and pixel coords
+#   (f32 <-> u32) — precision loss beyond 23/52 mantissa bits is irrelevant
+#   for VISUALIZATION; sizes are accounting-accurate in u64 and only become
+#   floats at the draw boundary. Ids (u32) and color depths (u16->u8) are
+#   bounded by the arena/budget invariants.
+# - unreadable_literal: hex RGB colors (0x34D399, 0xFF6B4A) read better
+#   without digit separators; the spec itself spells them that way.
+# - implicit_hasher: quickwins::resolve takes the app's std HashMap; there
+#   is exactly one caller and no cross-crate reuse.
+# - cast_possible_wrap: snapshot deltas are `after - before` of u64 sizes
+#   (< 2^63 in any realistic scan); wrap would need an 8-exabyte folder.
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+unreadable_literal = "allow"
+implicit_hasher = "allow"

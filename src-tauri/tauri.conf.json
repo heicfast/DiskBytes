@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DiskBytes",
+  "version": "0.1.0",
+  "identifier": "com.confines.diskbytes",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "DiskBytes",
+        "width": 1680,
+        "height": 1050,
+        "minWidth": 1280,
+        "minHeight": 760,
+        "decorations": false,
+        "shadow": true,
+        "transparent": false,
+        "center": true,
+        "titleBarStyle": "Overlay"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost; frame-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost https://us.i.posthog.com",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "read": true,
+          "write": false
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "dmg",
+      "app"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "copyright": "\u00a9 2026 DiskBytes",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "dmg": {
+        "appPosition": {
+          "x": 130,
+          "y": 160
+        },
+        "applicationFolderPosition": {
+          "x": 410,
+          "y": 160
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "source": "code-archive",
+  "capabilities": [
+    {"capability":"application code","source":"DiskBytes archive","outcome":"preserve React 18 + Vite 6 + Tauri 2 stack","status":"in_progress","next_action":"replace template and verify"},
+    {"capability":"Rust scanning core","source":"src-tauri/core","outcome":"preserve","status":"in_progress","next_action":"verify command wiring"},
+    {"capability":"native Tauri commands","source":"src-tauri/src/commands","outcome":"preserve","status":"in_progress","next_action":"verify frontend IPC contracts"},
+    {"capability":"desktop interface","source":"src and screenshot references","outcome":"refine","status":"in_progress","next_action":"polish all desktop layouts"},
+    {"capability":"browser preview data","source":"development-only mock backend","outcome":"preserve development-only fallback","status":"in_progress","next_action":"confirm excluded from Tauri production"},
+    {"capability":"database records","source":"none detected","outcome":"not applicable","status":"verified","next_action":"none"},
+    {"capability":"authentication identities","source":"none detected","outcome":"not applicable","status":"verified","next_action":"none"},
+    {"capability":"external analytics","source":"PostHog optional configuration","outcome":"preserve","status":"pending","next_action":"requires production key for live verification"},
+    {"capability":"licensing","source":"Dodo license validation commands","outcome":"preserve","status":"in_progress","next_action":"verify UI wiring"},
+    {"capability":"distribution","source":"Tauri Windows/macOS bundle configuration","outcome":"preserve","status":"pending","next_action":"native bundle verification requires desktop CI"}
+  ]
+}

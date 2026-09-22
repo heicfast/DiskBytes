@@ -1,0 +1,458 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * Shell — app grid, custom title bar (Windows caption / macOS traffic
+ * lights), top bar (brand, nav capsules, breadcrumb, search, queue,
+ * theme, inspector, license chip), body columns, degrade banner.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.db-app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  color: var(--text);
+  font-size: 13px;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ── Title bar (Windows: caption buttons; macOS: traffic-light gap) ── */
+.db-titlebar {
+  height: var(--title-bar-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  background: var(--background);
+  border-bottom: 1px solid var(--divider);
+}
+.db-titlebar[data-os="macos"] {
+  padding-left: 78px; /* traffic-light reserve (titleBarStyle: overlay) */
+  border-bottom: none;
+  background: var(--background);
+}
+.db-titlebar-drag {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 0 14px;
+  overflow: hidden;
+}
+.db-titlebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-caption {
+  flex: none;
+  display: flex;
+}
+.db-caption button {
+  width: var(--caption-btn-w);
+  height: var(--caption-btn-h);
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  transition: background var(--fade) ease, color var(--fade) ease;
+}
+.db-caption button:hover {
+  background: var(--chip);
+  color: var(--text);
+}
+.db-caption button.db-close:hover {
+  background: var(--close-hover);
+  color: #fff;
+}
+.db-caption button.db-close:active {
+  background: #c50f1f;
+  color: #fff;
+}
+
+/* ── Top bar ────────────────────────────────────────────────────────── */
+.db-topbar {
+  height: var(--top-bar-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--background);
+  z-index: 5;
+}
+
+.db-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 8px 0 2px;
+  flex: none;
+}
+.db-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-s);
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-1);
+}
+.db-brand strong {
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Tab capsules — the active one is a filled ink pill that slides (framer layoutId) */
+.db-tabcaps {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+.db-tabcaps button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-m);
+  padding: 8px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: background var(--fade) ease, color var(--fade) ease;
+}
+.db-tabcaps button:hover {
+  background: var(--chip);
+  color: var(--text);
+}
+.db-tabcaps button .db-tab-label {
+  white-space: nowrap;
+}
+.db-tabcaps button[data-active="true"] {
+  color: var(--on-ink);
+}
+.db-tabcaps button[data-active="true"]:hover {
+  background: var(--ink-strong);
+}
+.db-tab-pill {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  border-radius: var(--radius-m);
+  z-index: -1;
+}
+
+/* Breadcrumb */
+.db-breadcrumb {
+  min-width: 0;
+  flex: 1 1 160px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-left: 1px solid var(--divider);
+  padding-left: 10px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+}
+.db-breadcrumb-back {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+}
+.db-breadcrumb-back:hover:not(:disabled) {
+  background: var(--chip);
+  color: var(--text);
+}
+.db-breadcrumb-back:disabled {
+  opacity: 0.35;
+}
+.db-bcrumb {
+  flex: none;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-s);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-secondary);
+}
+.db-bcrumb:hover {
+  background: var(--chip);
+  color: var(--text);
+}
+.db-bcrumb.current {
+  background: var(--chip);
+  color: var(--text);
+  font-weight: 650;
+}
+.db-bcrumb-sep {
+  color: var(--text-tertiary);
+  display: grid;
+  place-items: center;
+}
+
+/* Search capsule */
+.db-search {
+  flex: 0 1 236px;
+  height: 34px;
+  min-width: 132px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 0 10px;
+  background: var(--card);
+  color: var(--text-tertiary);
+  transition: border-color var(--fade) ease, box-shadow var(--fade) ease;
+}
+.db-search:focus-within {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--ink-soft);
+}
+.db-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.db-search input::placeholder {
+  color: var(--text-tertiary);
+}
+.db-search .db-search-clear {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+}
+.db-search .db-search-clear:hover {
+  background: var(--chip);
+  color: var(--text);
+}
+
+/* Cleanup queue button + badge */
+.db-queue-button {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  border-radius: var(--radius-m);
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: background var(--fade) ease;
+}
+.db-queue-button:hover {
+  background: var(--track);
+  color: var(--text);
+}
+.db-queue-button b {
+  position: absolute;
+  right: -5px;
+  top: -6px;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--used);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(255, 59, 48, 0.4);
+}
+.db-queue-button.has-items {
+  border-color: transparent;
+}
+
+/* Icon buttons (theme/inspector/etc.) */
+.db-icon-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--chip);
+  color: var(--text-secondary);
+  transition: background var(--fade) ease, color var(--fade) ease;
+}
+.db-icon-button:hover,
+.db-icon-button.is-active {
+  background: var(--track);
+  color: var(--text);
+}
+
+/* License chip in topbar */
+.db-license-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--chip);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-secondary);
+  transition: background var(--fade) ease;
+}
+.db-license-chip:hover {
+  background: var(--track);
+}
+.db-license-chip.pro {
+  border-color: color-mix(in oklab, var(--ink) 45%, transparent);
+  background: var(--ink-soft);
+  color: var(--ink);
+}
+.db-license-chip .db-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.db-license-chip.pro .db-dot {
+  background: var(--ink);
+}
+.db-license-chip.degraded .db-dot {
+  background: var(--used);
+}
+
+/* ── Body columns (spec §3: 340 / main / 382 on Explore) ───────────── */
+.db-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  transition: grid-template-columns var(--spring) ease;
+}
+.db-body.has-inspector {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--inspector-w);
+}
+.db-body > .db-sidebar-col {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  border-right: 1px solid var(--divider);
+  background: var(--panel);
+}
+.db-body > .db-main-col {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+}
+.db-body > .db-inspector-col {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  border-left: 1px solid var(--divider);
+  background: var(--panel);
+  animation: db-inspector-in var(--spring) ease both;
+}
+@keyframes db-inspector-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Degrade banner (license) */
+.db-degrade-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--used-soft);
+  color: var(--used);
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid color-mix(in oklab, var(--used) 25%, transparent);
+}
+
+/* ── Responsive ladder (topbar) ─────────────────────────────────────── */
+@media (max-width: 1500px) {
+  .db-body.has-inspector {
+    grid-template-columns: var(--sidebar-w-compact) minmax(0, 1fr) var(--inspector-w-compact);
+  }
+  .db-body:not(.has-inspector) {
+    grid-template-columns: var(--sidebar-w-compact) minmax(0, 1fr);
+  }
+  .db-tabcaps button .db-tab-label {
+    display: none;
+  }
+  .db-tabcaps button[data-active="true"] .db-tab-label {
+    display: inline;
+  }
+  .db-search {
+    flex-basis: 190px;
+  }
+}
+@media (max-width: 1280px) {
+  .db-brand strong {
+    display: none;
+  }
+  .db-breadcrumb {
+    flex-basis: 90px;
+  }
+  .db-queue-button .db-queue-label {
+    display: none;
+  }
+  .db-queue-button {
+    padding: 0 9px;
+  }
+  .db-license-chip {
+    width: 34px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+  .db-license-chip .db-dot {
+    width: 8px;
+    height: 8px;
+  }
+}

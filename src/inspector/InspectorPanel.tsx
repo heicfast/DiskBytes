@@ -1,0 +1,220 @@
+/**
+ * Inspector (spec §8): the selected node or current folder — icon +
+ * name + kind, full path (selectable mono), big size + % of scan,
+ * Details card with the conditional savings (green) / cluster overhead
+ * (secondary) rows, Largest Inside ranked list, action buttons
+ * (Reveal / Preview / Focus / Copy Path), and the Add-to-Cleanup
+ * toggle (disabled + tooltip for protected items).
+ */
+import { useEffect, useState } from "react";
+import {
+  CopyIcon, EyeIcon, FolderIcon, LockKeyholeIcon, SearchIcon, SparklesIcon, Trash2Icon, CheckIcon, CloudIcon,
+} from "../components/Icon";
+import { categoryIcon } from "../components/Icon";
+import { getNodeDetails, type NodeDetailsData } from "../viz/exploreIpc";
+import { invoke } from "../lib/ipc";
+import { bytes, relativeAge } from "../lib/format";
+import { useExploreStore } from "../state/explore";
+import { useScanStore } from "../state/scan";
+import { useCleanupStore } from "../state/cleanup";
+
+const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
+
+export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void }) {
+  const generation = useScanStore((s) => s.generation);
+  const status = useScanStore((s) => s.status);
+  const currentFolder = useExploreStore((s) => s.currentFolder);
+  const selectedNode = useExploreStore((s) => s.selectedNode);
+  const openFolder = useExploreStore((s) => s.openFolder);
+  const contains = useCleanupStore((s) => s.contains);
+  const stage = useCleanupStore((s) => s.stage);
+  const unstage = useCleanupStore((s) => s.unstage);
+  const [details, setDetails] = useState<NodeDetailsData | null>(null);
+
+  const target = selectedNode ?? currentFolder;
+
+  useEffect(() => {
+    if (status !== "done") {
+      setDetails(null);
+      return;
+    }
+    let disposed = false;
+    void (async () => {
+      const d = await getNodeDetails(generation, target).catch(() => null);
+      if (!disposed) setDetails(d);
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [status, generation, target]);
+
+  if (status !== "done") {
+    return (
+      <aside className="db-inspector db-scroll" aria-label="Inspector">
+        <div className="db-inspector-empty">
+          <EyeIcon size={26} />
+          <p>Scan something to see details about folders and files here.</p>
+        </div>
+      </aside>
+    );
+  }
+
+  if (!details) {
+    return (
+      <aside className="db-inspector db-scroll" aria-label="Inspector">
+        <div className="db-loading-block">
+          <span className="db-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+        </div>
+      </aside>
+    );
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const KindIcon = details.isDir ? FolderIcon : categoryIcon(details.kind);
+  const staged = contains(details.id);
+  const kindColor = `#${details.kindColor.toString(16).padStart(6, "0")}`;
+
+  const doStage = () => {
+    if (details.isProtected) return;
+    if (staged) unstage(details.id);
+    else stage({ id: details.id, path: details.path, size: details.size, reason: "Manual" });
+  };
+
+  return (
+    <aside className="db-inspector db-scroll" aria-label="Inspector">
+      <div className="db-inspector-title">
+        <span className={`db-file-icon tone-${TONES[details.id % TONES.length]}`}>
+          <KindIcon size={24} />
+        </span>
+        <div>
+          <h2>{details.name}</h2>
+          <span className="db-kind">
+            <i style={{ background: kindColor }} />
+            {details.isDir ? "Folder" : details.kind}
+          </span>
+        </div>
+      </div>
+      <p className="db-path">{details.path}</p>
+      <div className="db-big-size">
+        <strong className="tnum">{bytes(details.size)}</strong>
+        <span className="tnum">{(details.shareOfScan * 100).toFixed(1)}% of scan</span>
+      </div>
+      {details.isCloud && (
+        <div className="db-cloud-note">
+          <CloudIcon size={12} /> Stored in the cloud (not downloaded)
+        </div>
+      )}
+
+      <section className="db-inspector-card">
+        <header>
+          <span>Details</span>
+        </header>
+        <div className="db-detail">
+          <span>Size on disk</span>
+          <b className="tnum">{bytes(details.size)}</b>
+        </div>
+        <div className="db-detail">
+          <span>Logical size</span>
+          <b className="tnum">{bytes(details.logical)}</b>
+        </div>
+        {details.savings > 0 && (
+          <div className="db-detail">
+            <span>Compressed / sparse savings</span>
+            <b className="accent tnum">{bytes(details.savings)}</b>
+          </div>
+        )}
+        {details.overhead > 0 && (
+          <div className="db-detail">
+            <span>Cluster overhead</span>
+            <b className="secondary tnum">{bytes(details.overhead)}</b>
+          </div>
+        )}
+        <div className="db-detail">
+          <span>{details.isDir ? "Files" : "Kind"}</span>
+          <b className="tnum">{details.isDir ? details.files.toLocaleString() : details.kind}</b>
+        </div>
+        {details.isDir && (
+          <div className="db-detail">
+            <span>Folders</span>
+            <b className="tnum">{details.folders.toLocaleString()}</b>
+          </div>
+        )}
+        <div className="db-detail">
+          <span>Of parent</span>
+          <b className="tnum">{(details.ofParent * 100).toFixed(1)}%</b>
+        </div>
+        <div className="db-detail">
+          <span>Modified</span>
+          <b>{relativeAge(details.modified, now)}</b>
+        </div>
+        <div className="db-detail">
+          <span>Created</span>
+          <b>{details.created > 0 ? relativeAge(details.created, now) : "—"}</b>
+        </div>
+      </section>
+
+      {details.isDir && details.largest.length > 0 && (
+        <section className="db-inspector-card">
+          <header>
+            <span>Largest inside</span>
+            <span>{details.largest.length} items</span>
+          </header>
+          {details.largest.map((l, i) => (
+            <button key={l.id} type="button" className="db-largest" onClick={() => useExploreStore.getState().select(l.id)} title={l.name}>
+              <span>
+                <i className={`tone-${TONES[(i + 1) % TONES.length]}`} />
+                <em>{l.name}</em>
+              </span>
+              <b className="tnum">{bytes(l.size)}</b>
+            </button>
+          ))}
+        </section>
+      )}
+
+      <div className="db-inspector-actions">
+        <button type="button" className="db-outline" onClick={() => void invoke("reveal_in_explorer", { generation, id: details.id }).catch(() => undefined)}>
+          <EyeIcon size={14} /> Reveal
+        </button>
+        <button type="button" className="db-outline" disabled={details.isCloud} onClick={() => onPreview(details.id)} title={details.isCloud ? "Cloud placeholders are never previewed" : "Preview"}>
+          <SearchIcon size={14} /> Preview
+        </button>
+        <button
+          type="button"
+          className="db-outline"
+          onClick={() => {
+            if (details.isDir) openFolder(details.id);
+            else openFolder(currentFolder);
+          }}
+        >
+          <SparklesIcon size={14} /> Focus
+        </button>
+        <button
+          type="button"
+          className="db-outline"
+          onClick={() => {
+            void invoke("copy_path", { generation, id: details.id }).catch(() => undefined);
+            void navigator.clipboard?.writeText(details.path).catch(() => undefined);
+          }}
+        >
+          <CopyIcon size={14} /> Copy Path
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className={`db-cleanup ${staged ? "is-staged" : ""}`}
+        disabled={details.isProtected}
+        title={details.isProtected ? "Windows manages this item" : staged ? "Staged — click to unstage" : "Add to the Cleanup Queue"}
+        onClick={doStage}
+      >
+        {staged ? <CheckIcon size={15} /> : <Trash2Icon size={15} />}
+        {staged ? "Staged for Cleanup ✓" : details.isProtected ? "Managed by Windows" : "Add to Cleanup"}
+      </button>
+      {details.isProtected && (
+        <div className="db-cloud-note" style={{ marginTop: 8 }}>
+          <LockKeyholeIcon size={12} /> Windows manages this item — it can’t be staged.
+        </div>
+      )}
+    </aside>
+  );
+}

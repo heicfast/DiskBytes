@@ -1,0 +1,201 @@
+/**
+ * Age Map mode (spec §7.8): "How old are these bytes?" 6 buckets,
+ * year×month heatmap with less/more legend + busiest month, and
+ * Big & Untouched (≥40 MB, >1 year) with +/✓ stage toggles and
+ * "Stage top N for cleanup".
+ */
+import { useEffect, useState } from "react";
+import { CheckIcon, FileIcon, PlusIcon } from "../../components/Icon";
+import { getAgeMap, type AgeMapDataData, type BigRowData } from "../../viz/exploreIpc";
+import { bytes, relativeAge } from "../../lib/format";
+import { useCleanupStore } from "../../state/cleanup";
+import { getNodeDetails } from "../../viz/exploreIpc";
+
+const AGE_CSS = ["var(--age-0)", "var(--age-1)", "var(--age-2)", "var(--age-3)", "var(--age-4)", "var(--age-5)"];
+const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+export interface AgeMapModeProps {
+  generation: number;
+  folder: number;
+  onSelect: (id: number | null) => void;
+  onHover: (id: number | null, x: number, y: number) => void;
+  onContextMenu: (id: number, x: number, y: number) => void;
+}
+
+export function AgeMapMode(props: AgeMapModeProps) {
+  const [data, setData] = useState<AgeMapDataData | null>(null);
+  const stage = useCleanupStore((s) => s.stage);
+  const contains = useCleanupStore((s) => s.contains);
+  const unstage = useCleanupStore((s) => s.unstage);
+
+  useEffect(() => {
+    let disposed = false;
+    void (async () => {
+      try {
+        const d = await getAgeMap(props.generation, props.folder);
+        if (!disposed) setData(d);
+      } catch {
+        /* stale — dropped */
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.generation, props.folder]);
+
+  if (!data) {
+    return (
+      <div className="db-loading-block">
+        <span className="db-spinner" />
+        <span>Bucketing by age…</span>
+      </div>
+    );
+  }
+
+  const total = data.total || 1;
+  const heat = data.heatmap;
+  const years: number[] = [];
+  for (let y = heat.firstYear; y <= heat.lastYear; y++) years.push(y);
+  const busiest = heat.busiest;
+
+  const stageBig = async (row: BigRowData) => {
+    const d = await getNodeDetails(props.generation, row.id).catch(() => null);
+    if (d) {
+      stage({ id: row.id, path: d.path, size: row.onDisk || row.logical, reason: "Big & Untouched" });
+    }
+  };
+
+  const stageTop = async () => {
+    for (const row of data.big.slice(0, 25)) {
+      if (row.protected) continue;
+      const d = await getNodeDetails(props.generation, row.id).catch(() => null);
+      if (d) stage({ id: row.id, path: d.path, size: row.onDisk || row.logical, reason: "Big & Untouched" });
+    }
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+
+  return (
+    <div className="db-age">
+      <section>
+        <header>
+          <strong>How old are these bytes?</strong>
+          <b className="tnum">{bytes(data.total)}</b>
+        </header>
+        {data.buckets.map((b, i) => (
+          <div className="age-row" key={data.bucketLabels[i]}>
+            <span>{data.bucketLabels[i]}</span>
+            <i>
+              <b style={{ width: `${Math.max(2, (b / total) * 100)}%`, background: AGE_CSS[i] }} />
+            </i>
+            <strong className="tnum">{bytes(b)}</strong>
+            <em className="tnum">{((b / total) * 100).toFixed(1)}%</em>
+          </div>
+        ))}
+      </section>
+
+      <section>
+        <header>
+          <strong>Bytes by last-modified month</strong>
+          {busiest && (
+            <b className="tnum">
+              busiest: {MONTHS[busiest[1]]} {busiest[0]}
+            </b>
+          )}
+        </header>
+        <div className="heat-labels">
+          <span />
+          {MONTHS.map((m, i) => (
+            <span key={i}>{m}</span>
+          ))}
+        </div>
+        {years.map((y) => (
+          <div className="heat-row" key={y}>
+            <span className="tnum">{y}</span>
+            {Array.from({ length: 12 }, (_, mi) => {
+              const idx = (y - heat.firstYear) * 12 + mi;
+              const v = heat.bytes[idx] ?? 0;
+              const frac = heat.max > 0 ? v / heat.max : 0;
+              const isBusiest = busiest && busiest[0] === y && busiest[1] === mi;
+              return (
+                <i
+                  key={mi}
+                  className={isBusiest ? "busiest" : ""}
+                  style={{ ["--heat" as string]: Math.max(0.08, frac).toFixed(2) }}
+                  title={`${MONTHS[mi]} ${y} — ${bytes(v)}`}
+                />
+              );
+            })}
+          </div>
+        ))}
+        <div className="heat-legend">
+          <span>less</span>
+          <span className="db-heat-scale">
+            <i style={{ background: "color-mix(in oklab, var(--pastel-blue) 15%, var(--track))" }} />
+            <i style={{ background: "color-mix(in oklab, var(--pastel-blue) 40%, var(--track))" }} />
+            <i style={{ background: "color-mix(in oklab, var(--pastel-blue) 70%, var(--track))" }} />
+            <i style={{ background: "var(--pastel-blue)" }} />
+          </span>
+          <span>more</span>
+        </div>
+      </section>
+
+      <section>
+        <div className="db-big-head">
+          <header style={{ margin: 0 }}>
+            <strong>Big &amp; Untouched</strong>
+            <b className="tnum">{data.big.length} items</b>
+          </header>
+          <button type="button" className="db-outline compact" onClick={() => void stageTop()} disabled={data.big.length === 0}>
+            <PlusIcon size={13} /> Stage top {Math.min(25, data.big.length)} for cleanup
+          </button>
+        </div>
+        {data.big.length === 0 ? (
+          <div className="db-substate">No files ≥ 40 MB untouched for over a year. Nothing to reclaim here.</div>
+        ) : (
+          data.big.slice(0, 50).map((row) => {
+            const staged = contains(row.id);
+            return (
+              <div
+                className="db-big-row"
+                key={row.id}
+                onPointerEnter={(e) => props.onHover(row.id, e.clientX, e.clientY)}
+                onPointerLeave={() => props.onHover(null, 0, 0)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  props.onContextMenu(row.id, e.clientX, e.clientY);
+                }}
+                onClick={() => props.onSelect(row.id)}
+              >
+                <FileIcon size={15} />
+                <span>
+                  <strong>{row.name}</strong>
+                  <small title={row.path}>{row.path}</small>
+                </span>
+                <button
+                  type="button"
+                  className={`db-stage-toggle ${staged ? "staged" : ""}`}
+                  aria-label={staged ? `Unstage ${row.name}` : `Stage ${row.name}`}
+                  title={staged ? "Staged — click to unstage" : "Stage for cleanup"}
+                  disabled={row.protected}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (staged) unstage(row.id);
+                    else void stageBig(row);
+                  }}
+                >
+                  {staged ? <CheckIcon size={13} /> : <PlusIcon size={13} />}
+                </button>
+                <em className="tnum" style={{ color: "var(--text-tertiary)", fontStyle: "normal", fontSize: 10 }}>
+                  {relativeAge(row.modified, now)}
+                </em>
+                <b className="tnum">{bytes(row.logical)}</b>
+              </div>
+            );
+          })
+        )}
+      </section>
+    </div>
+  );
+}

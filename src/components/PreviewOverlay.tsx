@@ -1,0 +1,141 @@
+/**
+ * Preview overlay (spec §8): modal for images / video / audio / PDF
+ * (iframe on the asset URL) / text (first 64 KB via a Rust command) and
+ * an icon + "Open with default app" for everything else. NEVER previews
+ * cloud placeholders. Esc closes.
+ */
+import { useEffect, useRef, useState } from "react";
+import { AppWindowIcon, ExternalLinkIcon, FileIcon, XIcon, CloudIcon } from "./Icon";
+import { getNodeDetails, previewText, type NodeDetailsData } from "../viz/exploreIpc";
+import { bytes } from "../lib/format";
+
+export function PreviewOverlay({
+  generation,
+  id,
+  onClose,
+  onOpenDefault,
+}: {
+  generation: number;
+  id: number;
+  onClose: () => void;
+  onOpenDefault: (id: number) => void;
+}) {
+  const [details, setDetails] = useState<NodeDetailsData | null>(null);
+  const [text, setText] = useState<{ text: string; truncated: boolean } | null>(null);
+  const [kind, setKind] = useState<"loading" | "image" | "video" | "audio" | "pdf" | "text" | "other" | "cloud">("loading");
+  const escRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
+
+  useEffect(() => {
+    let disposed = false;
+    void (async () => {
+      const d = await getNodeDetails(generation, id).catch(() => null);
+      if (disposed || !d) {
+        if (!disposed) setKind("other");
+        return;
+      }
+      setDetails(d);
+      if (d.isCloud) {
+        setKind("cloud");
+        return;
+      }
+      const cat = d.kind.toLowerCase();
+      if (cat === "images") setKind("image");
+      else if (cat === "video") setKind("video");
+      else if (cat === "audio") setKind("audio");
+      else if (cat === "documents") {
+        const name = d.name.toLowerCase();
+        if (name.endsWith(".pdf")) setKind("pdf");
+        else setKind("text");
+      } else if (["other", "folder"].includes(cat)) {
+        // text-able? try preview_text for plain-ish kinds
+        setKind("other");
+      } else {
+        setKind("other");
+      }
+      if (cat === "documents" || cat === "other" || cat === "developer") {
+        const t = await previewText(generation, id).catch(() => null);
+        if (t && !disposed) {
+          setText(t);
+          if (kind === "other") setKind("text");
+        }
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generation, id]);
+
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    escRef.current = esc;
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+
+  const name = details?.name ?? "";
+  const size = details?.size ?? 0;
+  const catColor = details ? `#${details.kindColor.toString(16).padStart(6, "0")}` : undefined;
+
+  const assetUrl = (asyncPath: string): string => {
+    // Tauri asset protocol (read-only) — convertPathProtocol equivalent.
+    void asyncPath;
+    return `asset://${encodeURI(`C:/${name}`)}`;
+  };
+
+  return (
+    <div className="db-scrim" role="dialog" aria-modal="true" aria-label={`Preview ${name}`}>
+      <div className="db-preview">
+        <div className="db-preview-head">
+          <FileIcon size={16} style={{ color: catColor }} />
+          <strong title={name}>{name || "…"}</strong>
+          <small className="tnum">{bytes(size)}</small>
+          <button type="button" className="db-preview-close" onClick={onClose} aria-label="Close preview" title="Esc">
+            <XIcon size={15} />
+          </button>
+        </div>
+        <div className="db-preview-body db-scroll">
+          {kind === "loading" && (
+            <div className="db-preview-other">
+              <span className="db-spinner" />
+            </div>
+          )}
+          {kind === "cloud" && (
+            <div className="db-preview-other">
+              <CloudIcon size={38} />
+              <p>Stored in the cloud — not downloaded.</p>
+              <p style={{ fontSize: 11, marginTop: -4 }}>Previews are disabled so nothing gets downloaded.</p>
+            </div>
+          )}
+          {kind === "image" && <img src={assetUrl(name)} alt={name} />}
+          {kind === "video" && <video src={assetUrl(name)} controls />}
+          {kind === "audio" && <audio src={assetUrl(name)} controls style={{ width: "80%" }} />}
+          {kind === "pdf" && <iframe src={assetUrl(name)} title={name} />}
+          {kind === "text" && (
+            <pre>{text?.text ?? "…"}</pre>
+          )}
+          {kind === "other" && (
+            <div className="db-preview-other">
+              <span className="db-preview-fileicon">
+                <AppWindowIcon size={34} />
+              </span>
+              <p>
+                {details?.kind ?? "File"} · {bytes(size)}
+              </p>
+              <button
+                type="button"
+                className="db-outline"
+                style={{ minHeight: 34, padding: "0 16px" }}
+                onClick={() => onOpenDefault(id)}
+              >
+                <ExternalLinkIcon size={14} /> Open with default app
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

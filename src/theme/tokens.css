@@ -1,0 +1,142 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * DiskBytes design tokens — BuildPrompt §14 (exact hex) extended with the
+ * owner-approved Lovable prototype visual system (semantic surface tokens +
+ * pastel tone families). One source of truth for every color/shape/metric.
+ *
+ * Light AND dark palettes are Apple-system-based per spec. Data pastels are
+ * theme-independent. Text on pastel fills is locked to #0F172A / #475569.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Surfaces (light) ─────────────────────────────────────────────── */
+  --background: #ffffff;
+  --panel: #f5f5f7;
+  --card: #ffffff;
+  --border: #d8d8dd;
+  --divider: #e5e5ea;
+  --chip: #f2f2f7;
+  --track: #e5e5ea;
+  --overlay: rgba(29, 29, 31, 0.16);
+
+  /* ── Text ─────────────────────────────────────────────────────────── */
+  --text: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #8e8e93;
+  --on-pastel: #0f172a;
+  --on-pastel-secondary: #334155;
+
+  /* ── Brand & status ───────────────────────────────────────────────── */
+  --ink: #ff6b4a;
+  --ink-strong: #f5522b;
+  --on-ink: #ffffff;
+  --ink-soft: rgba(255, 107, 74, 0.12);
+  --used: #ff3b30;
+  --used-soft: rgba(255, 59, 48, 0.1);
+  --free: #34c759;
+  --free-soft: rgba(52, 199, 89, 0.12);
+  --focus-ring: rgba(255, 107, 74, 0.55);
+  --close-hover: #e81123;
+
+  /* ── Data pastels (theme-independent, spec §4 + doc 05 §1.1) ──────── */
+  --cat-video: #fda4af;
+  --cat-audio: #c4b5fd;
+  --cat-image: #7dd3fc;
+  --cat-document: #fcd34d;
+  --cat-developer: #86efac;
+  --cat-archive: #fdba74;
+  --cat-apps: #93c5fd;
+  --cat-system: #5eead4;
+  --cat-other: #cbd5e1;
+
+  /* ── By-folder tone families (8 pastels; shades vary by depth+index) */
+  --pastel-blue: #cfe0f7;
+  --pastel-mint: #cdf0e6;
+  --pastel-violet: #e3d8f5;
+  --pastel-amber: #f9ecc3;
+  --pastel-rose: #f9dde1;
+  --pastel-green: #d4efc9;
+  --pastel-sky: #d9ecf9;
+  --pastel-slate: #e6e8ea;
+
+  /* ── Age buckets (spec §7 color modes) ────────────────────────────── */
+  --age-0: #34d399;
+  --age-1: #60a5fa;
+  --age-2: #818cf8;
+  --age-3: #a78bfa;
+  --age-4: #f472b6;
+  --age-5: #f87171;
+
+  /* ── Shape & motion (spec §14) ────────────────────────────────────── */
+  --radius-xs: 6px;
+  --radius-s: 8px;
+  --radius-m: 10px;
+  --radius-l: 12px;
+  --radius-xl: 14px;
+  --press-scale: 0.985;
+  --press-opacity: 0.75;
+  --spring: 250ms;
+  --fade: 160ms;
+
+  /* ── Elevation ────────────────────────────────────────────────────── */
+  --shadow-1: 0 1px 2px rgba(29, 29, 31, 0.06), 0 1px 3px rgba(29, 29, 31, 0.05);
+  --shadow-2: 0 4px 10px rgba(29, 29, 31, 0.08), 0 2px 4px rgba(29, 29, 31, 0.05);
+  --shadow-3: 0 12px 28px rgba(29, 29, 31, 0.14), 0 4px 8px rgba(29, 29, 31, 0.06);
+  --shadow-pop: 0 16px 44px rgba(29, 29, 31, 0.18), 0 4px 12px rgba(29, 29, 31, 0.08);
+  --card-sheen: linear-gradient(125deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 55%);
+
+  /* ── Typography (spec §3) ─────────────────────────────────────────── */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+
+  /* ── Layout metrics (spec §3: locked) ─────────────────────────────── */
+  --title-bar-h: 40px;
+  --top-bar-h: 56px;
+  --sidebar-w: 340px;
+  --inspector-w: 382px;
+  --caption-btn-w: 46px;
+  --caption-btn-h: 32px;
+  --sidebar-w-compact: 292px;
+  --inspector-w-compact: 326px;
+
+  /* ── Density ladder breakpoints (responsive degrade) ──────────────── */
+  --bp-compact: 1500px;
+  --bp-narrow: 1120px;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  /* ── Surfaces (dark) ──────────────────────────────────────────────── */
+  --background: #1e1e20;
+  --panel: #28282b;
+  --card: #2c2c2e;
+  --border: #3f3f43;
+  --divider: #38383a;
+  --chip: #3a3a3c;
+  --track: #3a3a3c;
+  --overlay: rgba(0, 0, 0, 0.5);
+
+  /* ── Text ─────────────────────────────────────────────────────────── */
+  --text: #f5f5f7;
+  --text-secondary: #aeaeb2;
+  --text-tertiary: #8e8e93;
+
+  /* ── Brand & status ───────────────────────────────────────────────── */
+  --ink: #ff7a5c;
+  --ink-strong: #ff8a6e;
+  --ink-soft: rgba(255, 122, 92, 0.16);
+  --used: #ff453a;
+  --used-soft: rgba(255, 69, 58, 0.14);
+  --free: #30d158;
+  --free-soft: rgba(48, 209, 88, 0.14);
+  --focus-ring: rgba(255, 122, 92, 0.6);
+
+  /* ── Elevation (deeper in dark) ───────────────────────────────────── */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 10px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 12px 28px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 16px 44px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.5);
+  --card-sheen: linear-gradient(125deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 55%);
+
+  color-scheme: dark;
+}

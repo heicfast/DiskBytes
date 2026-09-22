@@ -1,0 +1,224 @@
+/**
+ * Folders mode (spec §7.2, the default): virtualized grid of
+ * folder-shaped cards (tab + sheen + pastel tint, hover lift, 3
+ * category dots, "N items", size) + the Files tiles below (category
+ * icon, name, "Category · relative age", size; dblclick → Preview).
+ * The whole body scrolls inside the visual stage (one scroller).
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { LockKeyholeIcon, categoryIcon } from "../../components/Icon";
+import { getFolderView, type FolderViewData } from "../../viz/exploreIpc";
+import { bytes, relativeAge } from "../../lib/format";
+
+const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
+
+export interface FoldersModeProps {
+  generation: number;
+  folder: number;
+  filter: string;
+  selectedId: number | null;
+  onSelect: (id: number | null) => void;
+  onOpen: (id: number) => void;
+  onPreview: (id: number) => void;
+  onContextMenu: (id: number, x: number, y: number) => void;
+  onHover: (id: number | null, x: number, y: number) => void;
+}
+
+export function FoldersMode(props: FoldersModeProps) {
+  const [data, setData] = useState<FolderViewData | null>(null);
+  const [stale, setStale] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const key = `${props.generation}:${props.folder}:${props.filter}`;
+
+  useEffect(() => {
+    let disposed = false;
+    setStale(false);
+    void (async () => {
+      try {
+        const d = await getFolderView(props.generation, props.folder, props.filter);
+        if (!disposed) setData(d);
+      } catch (e) {
+        if (!disposed) setStale(String(e).includes("stale generation"));
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  // Responsive column count (the grid column axis; rows are virtual).
+  const [cols, setCols] = useState(2);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setCols(Math.max(1, Math.floor((el.clientWidth - 16) / 288)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [data]);
+
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const out: typeof data.folders[] = [];
+    for (let i = 0; i < data.folders.length; i += cols) {
+      out.push(data.folders.slice(i, i + cols));
+    }
+    return out;
+  }, [data, cols]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 162,
+    overscan: 4,
+  });
+
+  if (stale) {
+    return <div className="db-loading-block">Scan changed — reloading…</div>;
+  }
+
+  if (!data) {
+    return (
+      <div className="db-loading-block">
+        <span className="db-spinner" />
+        <span>Loading folders…</span>
+      </div>
+    );
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  return (
+    <div className="db-folders-view">
+      <div className="db-view-heading">
+        <h2>Folders</h2>
+        <span className="db-count-chip tnum">{data.folders.length}</span>
+      </div>
+      <div ref={scrollRef} className="db-folders-scroll db-scroll">
+        {data.folders.length === 0 ? (
+          <div className="db-substate">{props.filter ? `No folders match “${props.filter}”.` : "This folder is empty."}</div>
+        ) : (
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualizer.getVirtualItems().map((vi) => (
+              <div
+                key={vi.key}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${vi.start}px)`,
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                    gap: 14,
+                    padding: "0 0 14px",
+                  }}
+                >
+                  {rows[vi.index].map((f, i) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className={`db-folder-card tone-${TONES[(vi.index * cols + i) % TONES.length]} ${
+                        props.selectedId === f.id ? "is-selected" : ""
+                      } ${f.protected ? "is-protected" : ""}`}
+                      onClick={() => props.onSelect(f.id)}
+                      onDoubleClick={() => props.onOpen(f.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        props.onContextMenu(f.id, e.clientX, e.clientY);
+                      }}
+                      onPointerEnter={(e) => props.onHover(f.id, e.clientX, e.clientY)}
+                      onPointerLeave={() => props.onHover(null, 0, 0)}
+                    >
+                      {f.protected && (
+                        <span className="db-folder-protected-badge" title="Windows manages this item">
+                          <LockKeyholeIcon size={13} />
+                        </span>
+                      )}
+                      <span className="db-folder-tab" />
+                      <span className="db-folder-name">{f.name}</span>
+                      <span className="db-folder-meta">
+                        <span className="db-dots">
+                          {f.categories.slice(0, 3).map((c) => (
+                            <i
+                              key={c.label}
+                              style={{ background: `#${c.color.toString(16).padStart(6, "0")}` }}
+                              title={c.label}
+                            />
+                          ))}
+                          <span style={{ marginLeft: 7, fontWeight: 550 }}>
+                            {f.itemCount.toLocaleString()} items
+                          </span>
+                        </span>
+                        <strong className="tnum">{bytes(f.size)}</strong>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {data.folders.length > 0 && (
+          <div className="db-files-heading db-view-heading" style={{ paddingTop: 18, marginTop: 4 }}>
+            <h2>Files</h2>
+            <span className="db-count-chip tnum">
+              {data.files.length}
+              {data.filesCapped ? "+" : ""}
+            </span>
+          </div>
+        )}
+        {data.files.length === 0 ? (
+          <div className="db-substate">
+            {props.filter ? `No files match “${props.filter}”.` : "No files in this folder."}
+          </div>
+        ) : (
+          <div className="db-files-grid">
+            {data.files.map((f) => {
+              const Icon = categoryIcon(f.category);
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`db-file-row ${props.selectedId === f.id ? "is-selected" : ""}`}
+                  style={{ ["--file-cat" as string]: `#${f.categoryColor.toString(16).padStart(6, "0")}` }}
+                  onClick={() => props.onSelect(f.id)}
+                  onDoubleClick={() => props.onPreview(f.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    props.onContextMenu(f.id, e.clientX, e.clientY);
+                  }}
+                  onPointerEnter={(e) => props.onHover(f.id, e.clientX, e.clientY)}
+                  onPointerLeave={() => props.onHover(null, 0, 0)}
+                >
+                  <Icon size={18} />
+                  <span>
+                    <strong>{f.name}</strong>
+                    <small>
+                      {f.category} · {relativeAge(f.modified, now)}
+                      {f.cloud ? " · cloud" : ""}
+                    </small>
+                  </span>
+                  <b className="tnum">{f.cloud ? "—" : bytes(f.size)}</b>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {data.filesCapped && (
+          <div className="db-files-more">
+            Showing the first {data.files.length} files — refine the filter to see more.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
