@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: File Explorer view with a tooltip popup for a specific system file.\n(2) QUALITY: PASS. UI renders correctly, multi-color bars and tooltips are aligned and visible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790101768,
+  "id": "202609230229269106b7d6a5704d74",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609230229269106b7d6a5704d74",
+  "usage": {
+    "completion_tokens": 41,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1116
+  }
+}

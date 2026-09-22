@@ -279,3 +279,23 @@ Stage Summary:
 - Every user-reported issue fixed at root cause; 8 additional instances of the path-truncation bug found and fixed system-wide (the exact "find all such bugs" ask)
 - VLM verification loop: light 9.5/10 + dark 9.0/10 folders view (zero defects), popover 9/10, context menu 9/10, scanning state 7.5→premium with sweep+rolling counter, welcome inspector verified
 - Round 13 ready to push; next: CI 26-frame verify (cancel button + open inspector visible in tour), then next-wave todos (T20)
+
+---
+Task ID: 12
+Agent: main (Super Z)
+Task: Round 13 verification + next-wave polish (N1-N13): CI hotfixes to green, responsive re-audit, degenerate states, commit guard, a11y, dead CSS
+
+Work Log:
+- 3 CI hotfixes needed (app crate unclippy-able on Linux — no root for webkit2gtk): (1) tauri.conf field is additionalBrowserArgs not windowsAdditionalBrowserArgs (build-script rejected, all 3 workflows red); (2) clippy unnecessary_wraps — cancel_scan → bool, resolve_path → Option<u32> directly; (3) clippy question_mark — guard.as_ref()?; + rustfmt wrap. LESSON: cargo fmt --all works on the app crate from Linux (no compile needed) — run it on every Rust change; for clippy, review new app-crate code manually against default lints
+- ALL 3 WORKFLOWS GREEN on 7b122c2; UI-Screenshots 26/26 frames PASS on real Windows (ci-artifacts/35765990337/REPORT.md) — new visuals confirmed in production build
+- Next-wave audits (all local, VLM-verified): responsive 1280/1440/1680/1920 — found + fixed a 20px horizontal overflow in the visual stage (obsolete .db-folders-scroll negative-margin scrollbar-bleed from the classic-scrollbar era; removed) → ZERO overflow all widths; 1280 topbar = designed icon-only degrade (VLM confirmed all 5 tab icons visible, nothing cut)
+- Degenerate states: filter-no-match in Folders/Top Sizes/List all render designed "Nothing matches" substates (9/10); Age Map 10/10
+- Tab-switch mid-scan: Monitor renders 4 cards, no errors; back to Explore shows correct state; commit-to-bin during a rescan now DISABLED with a plain-language tooltip ("Wait for the scan to finish — cleaning needs a settled map") instead of a jargon stale-generation error after the click
+- a11y: removed aria-live from the 150ms scanning counter (assistive-tech spam); Stop scan / TailPath / staged badge all keyboard-reachable or decorative-correct
+- Dead CSS: .db-live-counter b (old counter markup), .db-mid-ellipsis utility removed
+- Welcome-state composition VLM: 8/10 (hero balanced, inspector hints praised as onboarding; "right-heavy" is the deliberate open-inspector choice)
+
+Stage Summary:
+- Round 13 LIVE and green end-to-end: every user-reported issue fixed + verified locally, in the real Windows CI tour, and across both themes
+- Cumulative session-3 deliverables: dark-mode control-affordance token system, path truncation rebuilt system-wide (fitPath + TailPath, 8 sites), scan cancel end-to-end, Home/Recent navigate-first, premium scanning state, inspector open by default, recents=2 + live updates, overlay scrollbars, 7 micro-animation layers, instant staged-state reflection
+- Next: wave-3 todos (T20/N-list complete) — remaining ideas: monitor sparkline dark-mode contrast recheck, uninstall flow tour coverage, preview overlay regression pass

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Main \"Explore\" view showing analysis results for the \"DiskBytesTest\" folder.\n(2) QUALITY: PASS. UI renders correctly with clear data visualization and no layout issues.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790101766,
+  "id": "2026092302292463f98deea1b04f6f",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092302292463f98deea1b04f6f",
+  "usage": {
+    "completion_tokens": 43,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1118
+  }
+}

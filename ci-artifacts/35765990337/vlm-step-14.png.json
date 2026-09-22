@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Duplicates view (empty state, pre-scan).\n(2) QUALITY: PASS. UI renders correctly with clear text and multi-color data visualization.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790101782,
+  "id": "20260923022940d5a45abcef064fbc",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260923022940d5a45abcef064fbc",
+  "usage": {
+    "completion_tokens": 37,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1112
+  }
+}

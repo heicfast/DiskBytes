@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Treemap visualization view of a specific folder scan.\n(2) QUALITY: PASS. Multi-color treemap renders correctly with clear labels and no UI glitches.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790101751,
+  "id": "20260923022910913cebd323c24cc7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260923022910913cebd323c24cc7",
+  "usage": {
+    "completion_tokens": 38,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1113
+  }
+}
