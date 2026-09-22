@@ -314,8 +314,8 @@ function labelable(c: Cell, mode: string): boolean {
   }
   if (mode === "bubbles" || mode === "mind-map") {
     // Prefetch wider than the render gate (bubbles render labels from
-    // r≥19; mind-map dots from r≥20) so the repaint always has names.
-    return c.g[2] >= 16;
+    // r≥12; mind-map dots from r≥13) so the repaint always has names.
+    return c.g[2] >= 12;
   }
   return false; // sunburst labels drawn from arc math
 }
@@ -437,15 +437,21 @@ function drawCells(
       ctx.fillStyle = fill;
       ctx.fillRect(x, y, rw, rh);
       // Treemap: white gap separators between the pastel blocks (the
-      // reference's look); flame keeps the hairline dark stroke.
+      // reference's look); flame gets a hairline dark stroke — but ONLY
+      // on blocks wide enough to carry it: a 1px strokeRect on a 1-3px
+      // block degenerates into a dark line that REPLACES the block (the
+      // striped "picket fence" the pixel audit measured as 68 one-px
+      // background runs in a single row). Narrow blocks render flush
+      // and unstroked — the fine texture reads solid.
       if (mode === "treemap") {
         ctx.strokeStyle = "rgba(255,255,255,0.55)";
         ctx.lineWidth = 1.5;
-      } else {
+        ctx.strokeRect(x + 0.5, y + 0.5, rw - 1, rh - 1);
+      } else if (rw >= 4) {
         ctx.strokeStyle = "rgba(29,29,31,0.10)";
         ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, rw - 1, rh - 1);
       }
-      ctx.strokeRect(x + 0.5, y + 0.5, rw - 1, rh - 1);
       if (rw >= 44 && rh >= 16) {
         const name = names.get(c.id);
         if (name) {
@@ -518,10 +524,12 @@ function drawCells(
       // The sunburst center disc carries the dedicated white center
       // label below — skip the generic dark-ink circle label for it.
       const isSunburstCenter = mode === "sunburst" && c.id === layout.meta.node;
-      // Bubble labels: label every circle that can FIT one (a 10 px line
-      // needs ~19 px of radius). The old r≥30 gate left mid-size bubbles
-      // anonymous at common canvas sizes (770-840 px wide viz area).
-      const minLabelR = mode === "sunburst" ? 30 : 19;
+      // Bubble labels: label every circle that can FIT one. VLM audits
+      // kept flagging anonymous mid-size bubbles ("Program Files",
+      // "pagefile.sys" — no identification); a 9.5px line fits from
+      // r≈12 with clipping, so gate at 12 (sunburst keeps the wide 30
+      // gate — tiny translucent nested arcs are noise).
+      const minLabelR = mode === "sunburst" ? 30 : 12;
       if (r >= minLabelR && !isSunburstCenter) {
         const name = names.get(c.id);
         if (name) {
@@ -530,7 +538,7 @@ function drawCells(
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = ON_PASTEL;
-          ctx.font = `${big ? 700 : 600} ${big ? 11.5 : 10}px ${uiFont()}`;
+          ctx.font = `${big ? 700 : 600} ${big ? 11.5 : 9.5}px ${uiFont()}`;
           // Big bubbles get the reference's stacked treatment: name over
           // size (the u64 sizes tail) — small ones keep the single line.
           if (big && c.size > 0) {
@@ -553,7 +561,7 @@ function drawCells(
       ctx.strokeStyle = "rgba(29,29,31,0.28)";
       ctx.lineWidth = 1.4;
       ctx.stroke();
-      if (r >= 20) {
+      if (r >= 13) {
         const name = names.get(c.id);
         if (name) {
           const label = props.abbreviateLabels ? abbreviate(name) : name;
@@ -562,7 +570,23 @@ function drawCells(
           ctx.textBaseline = "middle";
           const left = x > w / 2;
           ctx.textAlign = left ? "right" : "left";
-          ctx.fillText(clipLabel(ctx, label, 110), x + (left ? -r - 5 : r + 5), y - 6);
+          // In-bounds clamp: dots near an edge used to push their label
+          // straight through the canvas boundary (VLM: fragments like
+          // "...iberf..."). Anchor the label inside the canvas no matter
+          // where the dot sits.
+          const text = clipLabel(ctx, label, 110);
+          if (text) {
+            const tw = ctx.measureText(text).width;
+            let lx = x + (left ? -r - 5 : r + 5);
+            lx = left ? Math.max(2, lx) : Math.min(w - tw - 2, lx);
+            // If the clamped x would collide with the dot itself, drop
+            // to the other side instead of overlapping the dot.
+            if (left ? lx + tw > x - r + 2 : lx < x + r - 2) {
+              lx = left ? Math.min(w - tw - 2, x + r + 5) : Math.max(2, x - r - 5 - tw);
+            }
+            const ly = Math.max(8, Math.min(h - 8, y - 6));
+            ctx.fillText(text, lx, ly);
+          }
           ctx.textAlign = "left";
         }
       }

@@ -44,67 +44,109 @@ export type IconProps = SVGProps<SVGSVGElement> & { size?: number | string };
 export type AnyIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
 /* ── View-mode pictograms (no lucide equivalent — drawn to the lucide
- *    grid: 24×24, stroke 2, round caps/joins, currentColor) ─────────── */
+ *    grid: 24×24, stroke ~1.9, round caps/joins, currentColor).
+ *    Each glyph depicts its VISUALIZATION, not the noun: the sunburst
+ *    is segmented arcs (a radial chart, not a target), the flame view
+ *    is a flamegraph icicle (stacked rows tapering upward, not fire),
+ *    the age map is a heat grid (not a clock). ─────────────────────── */
 
-/** Treemap — nested rectangles of unequal area (classic squarified look). */
+/** Treemap — squarified nested rectangles of UNEQUAL area (the
+ * classic treemap asymmetry: big left cell, stacked right column). */
 export const TreemapIcon = ({ size = 16, ...p }: IconProps) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
     strokeLinecap="round" strokeLinejoin="round" width={size} height={size}
     aria-hidden focusable="false" {...p}>
-    <rect x="3" y="3" width="18" height="18" rx="1.5" />
-    <path d="M12 3v18" />
-    <path d="M12 10h9" />
-    <path d="M12 15h9" />
-    <path d="M3 8h9" />
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M10.75 3v18" />
+    <path d="M10.75 10h10.25" />
+    <path d="M3 14.75h7.75" />
   </svg>
 );
 
-/** Sunburst — concentric rings radiating from a filled center disc. */
+/** Sunburst — segmented concentric arcs around a filled hub (a radial
+ * chart: staggered arc segments with gaps — full rings would read as a
+ * target/radar, not a sunburst). Geometry generated for staggered
+ * angles: outer top-major 200°, outer lower-right 85°, inner
+ * lower-left 95°. */
 export const SunburstIcon = ({ size = 16, ...p }: IconProps) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-    strokeLinecap="round" strokeLinejoin="round" width={size} height={size}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
+    strokeLinecap="round" width={size} height={size}
     aria-hidden focusable="false" {...p}>
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="6.25" />
-    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+    <path d="M3.73 13.46A8.4 8.4 0 1 1 20.27 13.46" />
+    <path d="M19.27 16.2a8.4 8.4 0 0 1-10.82 3.41" />
+    <path d="M9.55 16.24a4.9 4.9 0 0 1-1.56-7.05" />
+    <circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none" />
   </svg>
 );
 
-/** Bubbles — three packed circles of decreasing size. */
-export const BubblesIcon = ({ size = 16, ...p }: IconProps) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+/** Flame — the Flame view's glyph. Design history: an abstract
+ * flamegraph/icicle stack was tried twice and failed VLM review at
+ * 15 px both times (reads as Wi-Fi signal bars — the call-stack
+ * metaphor needs color/labels to land). The mode is LABELED "Flame",
+ * so the glyph maps 1:1 to the label; this is a purpose-drawn flame
+ * (rounder bowl, shorter tip than lucide's, inner tongue) in the
+ * family stroke language. */
+export const FlamegraphIcon = ({ size = 16, ...p }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
     strokeLinecap="round" strokeLinejoin="round" width={size} height={size}
     aria-hidden focusable="false" {...p}>
-    <circle cx="9" cy="8.5" r="5.5" />
-    <circle cx="17.25" cy="15.25" r="4" />
-    <circle cx="6.75" cy="18.75" r="2.25" />
+    <path d="M12.4 2.9c-1.9 2.7-4.3 5-5.5 7.9-.9 2.2-1 4.6-.1 6.8a6.1 6.1 0 0 0 5.6 3.6h.3a6 6 0 0 0 5.5-3.7c.9-2.2.8-4.4-.2-6.6-.7-1.5-1.8-2.9-2.9-4.2-.7-.8-1.4-1.7-1.9-2.6-.2.6-.5 1.2-.8 1.6" />
+    <path d="M12.3 19.7a3.1 3.1 0 0 1-3.1-3.1c0-1.7 1.2-2.6 1.9-3.9.4.9 1.2 1.6 1.9 2.3.7.8 1.4 1.6 1.4 2.7a3 3 0 0 1-2.1 2z" />
+  </svg>
+);
+
+/** Bubbles — tangent-packed circles (Pythagoras-verified: the big and
+ * medium kiss; the small one nestles in the remaining gap). */
+export const BubblesIcon = ({ size = 16, ...p }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
+    strokeLinecap="round" width={size} height={size}
+    aria-hidden focusable="false" {...p}>
+    <circle cx="9" cy="13.8" r="6.1" />
+    <circle cx="17.2" cy="7.6" r="4.15" />
+    <circle cx="10.5" cy="4.6" r="2.6" />
   </svg>
 );
 
 /** Mind map — organic radial tree: filled hub with curved branches
- *  fanning out to leaf dots (asymmetric, like a sketched mind map). */
+ * fanning out to leaf dots (asymmetric, like a sketched mind map). */
 export const MindMapIcon = ({ size = 16, ...p }: IconProps) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
     strokeLinecap="round" strokeLinejoin="round" width={size} height={size}
     aria-hidden focusable="false" {...p}>
-    <circle cx="7.5" cy="12" r="2.6" fill="currentColor" stroke="none" />
-    <path d="M9.6 10.7C11.5 8.6 14.4 7 17.2 6.6" />
-    <path d="M10.1 12h9.4" />
-    <path d="M9.6 13.3c1.9 2.1 4.8 3.7 7.6 4.1" />
-    <circle cx="19" cy="5.5" r="1.7" />
-    <circle cx="20.3" cy="12" r="1.7" />
-    <circle cx="19" cy="18.5" r="1.7" />
+    <circle cx="7.2" cy="12" r="2.5" fill="currentColor" stroke="none" />
+    <path d="M9.4 10.6c1.8-2 4.6-3.5 7.3-3.9" />
+    <path d="M10 12h8.9" />
+    <path d="M9.4 13.4c1.8 2 4.6 3.5 7.3 3.9" />
+    <circle cx="18.9" cy="5.6" r="1.8" />
+    <circle cx="20.3" cy="12" r="1.8" />
+    <circle cx="18.9" cy="18.4" r="1.8" />
   </svg>
 );
 
 /** Top Sizes — ranked bars, biggest first (descending heights off a
- *  shared baseline — the reference's "bar chart" metaphor). */
+ *  shared baseline — the reference's "bar chart" metaphor; grid-snap
+ *  x positions and a slightly heavier stroke keep it crisp at 15 px). */
 export const TopSizesIcon = ({ size = 16, ...p }: IconProps) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1}
     strokeLinecap="round" width={size} height={size}
     aria-hidden focusable="false" {...p}>
-    <path d="M6 19V8" /><path d="M12 19v-8" /><path d="M18 19v-5" />
-    <path d="M3.5 19h17" />
+    <path d="M6 19.5V8" /><path d="M12 19.5v-8" /><path d="M18 19.5v-5" />
+    <path d="M3.5 19.5h17" />
+  </svg>
+);
+
+/** Age Map — a heat grid: bold filled cells at STRONGLY graded
+ * intensities (a subtle ramp reads as a generic app grid at 15 px —
+ * VLM-verified; the diagonal hot pattern is the heatmap signature). */
+export const AgeMapIcon = ({ size = 16, ...p }: IconProps) => (
+  <svg viewBox="0 0 24 24" width={size} height={size}
+    aria-hidden focusable="false" {...p}>
+    <rect x="1.6" y="5" width="6.2" height="6.2" rx="1.6" fill="currentColor" opacity="1" />
+    <rect x="8.9" y="5" width="6.2" height="6.2" rx="1.6" fill="currentColor" opacity="0.4" />
+    <rect x="16.2" y="5" width="6.2" height="6.2" rx="1.6" fill="currentColor" opacity="0.8" />
+    <rect x="1.6" y="12.2" width="6.2" height="6.2" rx="1.6" fill="currentColor" opacity="0.55" />
+    <rect x="8.9" y="12.2" width="6.2" height="6.2" rx="1.6" fill="currentColor" opacity="1" />
+    <rect x="16.2" y="12.2" width="6.2" height="6.2" rx="1.6" fill="currentColor" opacity="0.3" />
   </svg>
 );
 

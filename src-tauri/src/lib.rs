@@ -24,6 +24,51 @@ use platform::HostPlatform;
 
 use tauri::Manager;
 
+/// Comfortable default window size (logical px) — a document-style
+/// window, never screen-filling. `tauri.conf.json` creates the window
+/// with this size; [`fit_window_to_work_area`] then guarantees it fits
+/// the monitor's work area (taskbar / dock / menu bar excluded).
+const DEFAULT_WINDOW_W: f64 = 1440.0;
+const DEFAULT_WINDOW_H: f64 = 860.0;
+
+/// Never cover more than this fraction of the work area on either
+/// axis — the desktop must stay visible around the app (user-reported
+/// issue: the old 1680×1050 default clamped to the work area on
+/// 1080p Windows and MacBook displays, so the app opened effectively
+/// fullscreen on both platforms).
+const WORK_AREA_FRACTION: f64 = 0.86;
+
+/// Clamp the main window to a premium default size that fits the
+/// primary monitor's work area, then center and show it. Runs in
+/// `setup` while the window is still hidden (`visible: false` in the
+/// config) so the resize never flashes.
+fn fit_window_to_work_area(app: &tauri::App) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let monitor = window
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.current_monitor().ok().flatten());
+    if let Some(monitor) = monitor {
+        let area = monitor.work_area();
+        let scale = monitor.scale_factor();
+        // Work area is physical px; convert to logical for LogicalSize.
+        let area_w = area.size.width as f64 / scale;
+        let area_h = area.size.height as f64 / scale;
+        if area_w > 100.0 && area_h > 100.0 {
+            let w = DEFAULT_WINDOW_W.min((area_w * WORK_AREA_FRACTION).floor());
+            let h = DEFAULT_WINDOW_H.min((area_h * WORK_AREA_FRACTION).floor());
+            // set_size clamps to the configured min size on its own.
+            let _ = window.set_size(tauri::LogicalSize::new(w, h));
+            let _ = window.center();
+        }
+    }
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 /// Build and run the app (single window configured in `tauri.conf.json`).
 ///
 /// # Panics
@@ -36,6 +81,7 @@ pub fn run() {
         // Spec M0.4: the ONLY plugin is the file/folder dialog.
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            fit_window_to_work_area(app);
             app.manage(state::AppState::new());
             app.manage(commands::layout::layout_cache());
             app.manage(commands::layout::regroup_cache());

@@ -309,15 +309,21 @@ export function buildLayout(
     const layout = (items: Item[], a0: number, a1: number, d: number): void => {
       const sum = items.reduce((a, b) => a + b.v, 0);
       if (sum <= 0 || d >= Math.min(depth, 6)) return;
+      // Two-pass, mirroring the Rust engine: KEPT children (span ≥ 1.5px)
+      // are rescaled to fill the parent's span contiguously — skipped
+      // sub-pixel children leave no background holes between kept blocks
+      // (the old single-pass left a 1-2px hole per skipped sibling: the
+      // "picket fence" the pixel audit found — 67 bg runs ≤2px).
+      const kept = items.filter((it) => (it.v / sum) * (a1 - a0) * width > 1.5);
+      if (!kept.length) return;
+      const ksum = kept.reduce((a, b) => a + b.v, 0) || 1;
       let a = a0;
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        const span = (it.v / sum) * (a1 - a0);
-        if (span * width > 1.5) {
-          rows.push({ item: it, a0: a, a1: a + span, sib: i, d });
-          if (tree.nodes[it.node].isDir) {
-            layout(childrenSorted(tree, it.node), a, a + span, d + 1);
-          }
+      for (let i = 0; i < kept.length; i++) {
+        const it = kept[i];
+        const span = (it.v / ksum) * (a1 - a0);
+        rows.push({ item: it, a0: a, a1: a + span, sib: i, d });
+        if (tree.nodes[it.node].isDir) {
+          layout(childrenSorted(tree, it.node), a, a + span, d + 1);
         }
         a += span;
       }
@@ -325,68 +331,159 @@ export function buildLayout(
     layout(kids, 0, 1, 0);
     for (const r of rows.slice(0, MAX_CELLS)) {
       const n = tree.nodes[r.item.node];
+      const x0 = r.a0 * width;
+      const full = (r.a1 - r.a0) * width;
+      // Wide blocks keep a 1px inset on each side (visual separation);
+      // narrow blocks render FLUSH — the fixed inset striped the fine
+      // "picket fence" of small files into near-invisible slivers
+      // (mirrors the Rust engine's GAP_MIN_W rule).
+      const wide = full >= 4;
       cells.push({
         id: r.item.node,
         depth: r.d,
         flags: (n.isDir ? DIR_BIT : 0) | KIND_RECT,
         rgba: (colorFor(n, famOf(r.item.node), r.d, colorMode, now, r.sib) << 8) | 0xff,
-        g: [r.a0 * width + 1, r.d * rowH + 1, Math.max(1, r.a1 * width - r.a0 * width - 2), rowH - 2.5, 0],
+        g: [
+          x0 + (wide ? 1 : 0),
+          r.d * rowH + 1,
+          wide ? Math.max(1, full - 2) : full,
+          rowH - 2.5,
+          0,
+        ],
       });
     }
   } else if (mode === "bubbles") {
     const cx = width / 2;
     const cy = height / 2;
     const R = Math.min(width, height) / 2 - 8;
-    const sqrtSum = kids.reduce((a, b) => a + Math.sqrt(b.v), 0) || 1;
-    let ang = -Math.PI / 2;
-    for (let i = 0; i < kids.length && cells.length < MAX_CELLS; i++) {
-      const k = kids[i];
-      const rr = Math.min((Math.sqrt(k.v) / sqrtSum) * R * 1.75, R * 0.6);
-      const dist = R - rr - 2;
-      const x = cx + Math.cos(ang) * dist;
-      const y = cy + Math.sin(ang) * dist;
+    // Rust-engine parity: ring packing with a bisection fill-fit (the
+    // old heuristic single-ring placement left loose gaps and mismatched
+    // production). Children of a node with usable radius U get
+    // r = sqrt(share)·U, are ring-packed largest-first, then uniformly
+    // scaled by the largest factor whose pack still fits U — sibling
+    // ratios stay exact and the pack lands tangent to the rim.
+    const packFit = (
+      sizes: number[],
+      usable: number,
+    ): { i: number; x: number; y: number; r: number }[] => {
+      const total = sizes.reduce((a, b) => a + b, 0) || 1;
+      const base = sizes.map((v) => Math.sqrt(v / total) * usable);
+      const ks = base
+        .map((r, i) => ({ i, x: 0, y: 0, r, base: r }))
+        .filter((k) => k.r >= 2.5);
+      if (!ks.length) return [];
+      const pack = (arr: typeof ks): number => {
+        arr.sort((a, b) => b.r - a.r);
+        let placed = 0;
+        let ringR = 0;
+        const GAP = 2;
+        while (placed < arr.length) {
+          const r1 = arr[placed].r;
+          const ringCenterR = ringR === 0 ? 0 : ringR + r1;
+          if (ringCenterR <= 0) {
+            arr[placed].x = 0;
+            arr[placed].y = 0;
+            ringR = r1;
+            placed += 1;
+            continue;
+          }
+          let count = 1;
+          let angleUsed = 0;
+          let j = placed + 1;
+          while (j < arr.length) {
+            const r2 = arr[j].r;
+            const half = (r1 + r2 + GAP) / 2;
+            const ratio = Math.min(1, half / ringCenterR);
+            const theta = ratio >= 1 ? Math.PI : 2 * Math.asin(ratio);
+            if (angleUsed + theta > Math.PI * 2) break;
+            angleUsed += theta;
+            count += 1;
+            j += 1;
+          }
+          const step = (Math.PI * 2) / count;
+          let angle = 0;
+          for (const k of arr.slice(placed, placed + count)) {
+            k.x = ringCenterR * Math.cos(angle);
+            k.y = ringCenterR * Math.sin(angle);
+            angle += step;
+          }
+          ringR = ringCenterR + arr[placed].r;
+          placed += count;
+        }
+        return arr.reduce((m, k) => Math.max(m, Math.hypot(k.x, k.y) + k.r), 0);
+      };
+      const needed = pack(ks);
+      if (needed > usable && needed > 0) {
+        let lo = 0;
+        let hi = 1;
+        for (let it = 0; it < 24; it++) {
+          const mid = (lo + hi) / 2;
+          for (const k of ks) k.r = mid * k.base;
+          if (pack(ks) <= usable) lo = mid;
+          else hi = mid;
+        }
+        for (const k of ks) k.r = lo * k.base;
+        pack(ks);
+      }
+      return ks;
+    };
+    const packed = packFit(kids.map((k) => k.v), R);
+    for (let i = 0; i < packed.length && cells.length < MAX_CELLS; i++) {
+      const p = packed[i];
+      const k = kids[p.i];
+      const x = cx + p.x;
+      const y = cy + p.y;
+      const rr = p.r;
       const n = tree.nodes[k.node];
       cells.push({
         id: k.node,
         depth: 1,
         flags: (n.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
-        rgba: (colorFor(n, famOf(k.node), 1, colorMode, now, i) << 8) | 0xb4,
+        rgba: (colorFor(n, famOf(k.node), 1, colorMode, now, p.i) << 8) | 0xb4,
         g: [x, y, rr, 0, 0],
       });
       if (n.isDir && depth > 1) {
         const sub = childrenSorted(tree, k.node).slice(0, 14);
-        const ssum = sub.reduce((a, b) => a + Math.sqrt(b.v), 0) || 1;
-        let sa = 0;
-        let sj = 0;
-        for (const s of sub) {
-          const sr = Math.max(2.5, (Math.sqrt(s.v) / ssum) * rr * 0.62);
-          const sd = rr - sr - 1.5;
-          const sn = tree.nodes[s.node];
+        const subPacked = packFit(sub.map((s) => s.v), Math.max(0, rr - 3));
+        for (let sj = 0; sj < subPacked.length; sj++) {
+          const sp = subPacked[sj];
+          const sn = tree.nodes[sub[sp.i].node];
           cells.push({
-            id: s.node,
+            id: sub[sp.i].node,
             depth: 2,
             flags: (sn.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
-            rgba: (colorFor(sn, famOf(s.node), 2, colorMode, now, sj) << 8) | 0xd9,
-            g: [x + Math.cos(sa) * sd, y + Math.sin(sa) * sd, sr, 0, 0],
+            rgba: (colorFor(sn, famOf(sub[sp.i].node), 2, colorMode, now, sj) << 8) | 0xd9,
+            g: [x + sp.x, y + sp.y, sp.r, 0, 0],
           });
-          sa += 0.55;
-          sj += 1;
         }
       }
-      ang += Math.max(0.42, (Math.sqrt(k.v) / sqrtSum) * 6.4);
     }
   } else if (mode === "mind-map") {
     const cx = width / 2;
     const cy = height / 2;
     const sum = kids.reduce((a, b) => a + b.v, 0) || 1;
     const rMax = Math.min(width, height) / 2 - 44;
+    // Pull any dot (plus its radius + label air) inside the canvas: the
+    // sub-dots used to render at parent_r + sub_r + 14 which pushed the
+    // 12-o'clock branch straight through the top edge (VLM: "labels
+    // clipped by the container"). Mirrors the Rust engine's r_max margin.
+    const clampInside = (x: number, y: number, r: number): [number, number] => {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d = Math.hypot(dx, dy) || 1;
+      const maxD = Math.min(width, height) / 2 - r - 12;
+      if (d > maxD && maxD > 0) {
+        const k = maxD / d;
+        return [cx + dx * k, cy + dy * k];
+      }
+      return [x, y];
+    };
     for (let i = 0; i < kids.length; i++) {
       const k = kids[i];
       const ang = (i / kids.length) * Math.PI * 2 - Math.PI / 2 + 0.18;
       const rr = Math.max(9, Math.sqrt(k.v / sum) * rMax * 0.95);
       const dist = rMax - rr;
-      const x = cx + Math.cos(ang) * dist;
-      const y = cy + Math.sin(ang) * dist;
+      const [x, y] = clampInside(cx + Math.cos(ang) * dist, cy + Math.sin(ang) * dist, rr);
       const n = tree.nodes[k.node];
       cells.push({
         id: k.node,
@@ -403,13 +500,14 @@ export function buildLayout(
         for (const s of sub) {
           const sr = Math.max(3.5, Math.sqrt(s.v / ssum) * rr * 0.44);
           const sd = rr + sr + 14;
+          const [sx, sy] = clampInside(x + Math.cos(sa) * sd, y + Math.sin(sa) * sd, sr);
           const sn = tree.nodes[s.node];
           cells.push({
             id: s.node,
             depth: 2,
             flags: (sn.isDir ? DIR_BIT : 0) | KIND_DOT,
             rgba: (colorFor(sn, famOf(s.node), 2, colorMode, now, sj) << 8) | 0xcc,
-            g: [x + Math.cos(sa) * sd, y + Math.sin(sa) * sd, sr, x, y],
+            g: [sx, sy, sr, x, y],
           });
           sa += 0.27;
           sj += 1;

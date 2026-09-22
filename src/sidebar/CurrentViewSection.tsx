@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from "react";
 import { CopyIcon, EyeIcon } from "../components/Icon";
-import { OutlineButton, SectionCaption } from "../components/buttons";
+import { OutlineButton, SectionCaption, Spinner } from "../components/buttons";
 import { TailPath } from "../components/TailPath";
 import { invoke } from "../lib/ipc";
 import { bytes, duration } from "../lib/format";
@@ -66,7 +66,7 @@ export function CurrentViewSection() {
       {status === "scanning" && progress && (
         <div className="db-scan-strip" data-testid="scan-strip">
           <div className="db-scan-row">
-            <span className="db-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+            <Spinner size={16} />
             <span className="tnum">
               {progress.files.toLocaleString()} files · {bytes(progress.bytes)}
             </span>

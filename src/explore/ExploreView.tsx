@@ -18,6 +18,7 @@ import { AgeMapMode } from "./modes/AgeMapMode";
 import { ListMode } from "./modes/ListMode";
 import { HoverChip, type HoverChipHandle } from "../components/HoverChip";
 import { ItemContextMenu, type ItemMenuState } from "../components/ItemContextMenu";
+import { TailPath } from "../components/TailPath";
 import { invoke } from "../lib/ipc";
 import { bytes } from "../lib/format";
 import { useExploreStore } from "../state/explore";
@@ -271,9 +272,7 @@ export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) 
           </div>
           <h2>Scanning…</h2>
           <ScanCounter files={progress?.files ?? 0} totalBytes={progress?.bytes ?? 0} />
-          <span className="db-current-path" title={progress?.currentPath ?? ""}>
-            {displayPath || "\u00A0"}
-          </span>
+          <TailPath path={displayPath} className="db-current-path" />
           <button type="button" className="db-outline db-cancel-scan" onClick={() => void cancelScan()}>
             <SquareIcon size={13} /> Stop scan
           </button>

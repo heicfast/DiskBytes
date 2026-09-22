@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppWindowIcon, ExternalLinkIcon, FileIcon, XIcon, CloudIcon } from "./Icon";
 import { getNodeDetails, previewText, type NodeDetailsData } from "../viz/exploreIpc";
 import { bytes } from "../lib/format";
+import { Spinner } from "./buttons";
 
 export function PreviewOverlay({
   generation,
@@ -101,7 +102,7 @@ export function PreviewOverlay({
         <div className="db-preview-body db-scroll">
           {kind === "loading" && (
             <div className="db-preview-other">
-              <span className="db-spinner" />
+              <Spinner />
             </div>
           )}
           {kind === "cloud" && (

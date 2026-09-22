@@ -168,6 +168,23 @@
 .db-ranked button.is-selected .rank-bar {
   outline: 2px solid color-mix(in oklab, var(--ink) 60%, transparent);
 }
+
+/* Dark mode: the rank-bar text sits on the ROW surface (the pastel
+ * pill only underlays part of it) — --on-pastel (#0f172a dark navy)
+ * on a dark row is INVISIBLE. Muted tint bars + theme-ink text. */
+[data-theme="dark"] .rank-bar::before {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--tone, var(--pastel-blue)) 52%, #2a2a2e),
+    color-mix(in oklab, var(--tone, var(--pastel-blue)) 36%, #202024)
+  );
+}
+[data-theme="dark"] .rank-bar strong {
+  color: var(--text);
+}
+[data-theme="dark"] .rank-bar small {
+  color: var(--text-secondary);
+}
 .db-ranked .db-protected-flag {
   color: var(--text-tertiary);
 }

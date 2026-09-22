@@ -19,13 +19,20 @@ const measureCtx: CanvasRenderingContext2D | null = (() => {
   }
 })();
 
-/** Measure `s` in `font`; ~0.62em/char fallback when canvas is absent. */
-function measure(s: string, font: string): number {
+/** Measure `s` in `font`; ~0.62em/char fallback when canvas is absent.
+ * `letterSpacing` (px, 0 when "normal") is added per gap — canvas
+ * `measureText` does NOT include CSS letter-spacing, but the rendered
+ * text has it, so unaccounted tracking makes every measurement read
+ * narrow and paths overflow (the "cut in half" bug). */
+function measure(s: string, font: string, letterSpacing = 0): number {
+  let w: number;
   if (measureCtx) {
     measureCtx.font = font;
-    return measureCtx.measureText(s).width;
+    w = measureCtx.measureText(s).width;
+  } else {
+    w = s.length * 6.2;
   }
-  return s.length * 6.2;
+  return w + Math.max(0, s.length - 1) * letterSpacing;
 }
 
 /** Split a path into (head, tail) where head keeps the root + first
@@ -39,17 +46,22 @@ function splitPath(path: string, headSegments: number): [string, string] {
   return [head, tail];
 }
 
-/**
- * Ellipsize `path` in the middle so it fits `maxWidth` px in `font`.
+/** Ellipsize `path` in the middle so it fits `maxWidth` px in `font`.
  * Keeps up to 2 leading segments + the final segment(s); shrinks the
  * tail character-by-character before dropping tail segments entirely.
- */
+ * `opts.letterSpacing` accounts for CSS tracking (see `measure`);
+ * `opts.pad` reserves a safety margin (subpixel rounding, hinting). */
 export function fitPath(
   path: string,
   maxWidth: number,
   font: string,
+  opts?: { letterSpacing?: number; pad?: number },
 ): string {
-  if (measure(path, font) <= maxWidth) return path;
+  const ls = opts?.letterSpacing ?? 0;
+  const pad = opts?.pad ?? 0;
+  const budget = Math.max(8, maxWidth - pad);
+  const m = (s: string) => measure(s, font, ls);
+  if (m(path) <= budget) return path;
 
   // Drop tail segments until only one remains, always measuring.
   for (let head = 2; head >= 1; head--) {
@@ -57,7 +69,7 @@ export function fitPath(
     if (!t) break;
     for (;;) {
       const candidate = `${h}…${t}`;
-      if (measure(candidate, font) <= maxWidth) return candidate;
+      if (m(candidate) <= budget) return candidate;
       if (t.length <= 4) break; // keep at least a stub of the tail
       // Prefer dropping whole tail segments while we have >1 left.
       const sep = t.includes("\\") ? "\\" : "/";
@@ -74,7 +86,7 @@ export function fitPath(
   // most one char past the ellipsis for pathological budgets).
   const ellipsis = "…";
   let t = path;
-  while (t.length > 1 && measure(ellipsis + t, font) > maxWidth) {
+  while (t.length > 1 && m(ellipsis + t) > budget) {
     t = t.slice(1);
   }
   return ellipsis + t;

@@ -80,11 +80,20 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 [data-theme="dark"] .db-outline {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  /* Card fill (#2c2c2e) is nearly identical to the panel behind it
+   * (#28282b) — on sidebar/main surfaces the button read as floating
+   * text (VLM dark audit: "border almost invisible", 1.8:1). Lift the
+   * fill a step above the panel and brighten the border so the control
+   * boundary is obvious (round 2: #6a6a74 still read as disabled at
+   * ~2.7:1 — pushed to #7a7a85 ≈ 3.4:1 vs the panel). */
+  background: rgba(255, 255, 255, 0.045);
+  border-color: #7a7a85;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 [data-theme="dark"] .db-outline:hover {
-  border-color: #62626b;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.075);
+  border-color: #8d8d98;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .db-outline.compact {
   min-height: 28px;
@@ -348,6 +357,11 @@
   border-radius: var(--radius-s);
   background: color-mix(in oklab, var(--tone, var(--chip)) 70%, var(--card));
   color: var(--on-pastel);
+}
+/* Dark: muted tone tint + theme ink. */
+[data-theme="dark"] .db-quick-list .db-quick-icon {
+  background: color-mix(in oklab, var(--tone, var(--pastel-blue)) 42%, #26262a);
+  color: var(--text);
 }
 .db-quick-list button:hover .db-quick-chevron,
 .db-quick-list button.is-selected .db-quick-chevron {

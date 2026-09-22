@@ -13,13 +13,14 @@
     "windows": [
       {
         "title": "DiskBytes",
-        "width": 1680,
-        "height": 1050,
+        "width": 1440,
+        "height": 860,
         "minWidth": 1280,
         "minHeight": 760,
         "decorations": false,
         "shadow": true,
         "transparent": false,
+        "visible": false,
         "backgroundColor": "#F5F5F7",
         "center": true,
         "titleBarStyle": "Overlay",

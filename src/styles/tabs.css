@@ -154,11 +154,8 @@
   min-width: 0;
 }
 .db-dup-file .db-tail-path {
-  display: block;
   font: 10.5px/1.5 var(--font-mono);
   font-weight: 570;
-  overflow: hidden;
-  white-space: nowrap;
 }
 .db-dup-file small {
   color: var(--text-tertiary);
@@ -592,9 +589,8 @@
 .db-diff-row .db-diff-path,
 .db-diff-row > span {
   font: 10.5px/1.5 var(--font-mono);
-  overflow: hidden;
-  white-space: nowrap;
   color: var(--text-secondary);
+  min-width: 0;
 }
 .db-diff-row em {
   font-style: normal;

@@ -11,6 +11,7 @@ import { getAgeMap, type AgeMapDataData, type BigRowData } from "../../viz/explo
 import { bytes, relativeAge } from "../../lib/format";
 import { useCleanupStore } from "../../state/cleanup";
 import { getNodeDetails } from "../../viz/exploreIpc";
+import { Spinner } from "../../components/buttons";
 
 const AGE_CSS = ["var(--age-0)", "var(--age-1)", "var(--age-2)", "var(--age-3)", "var(--age-4)", "var(--age-5)"];
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -48,7 +49,7 @@ export function AgeMapMode(props: AgeMapModeProps) {
   if (!data) {
     return (
       <div className="db-loading-block">
-        <span className="db-spinner" />
+        <Spinner />
         <span>Bucketing by age…</span>
       </div>
     );

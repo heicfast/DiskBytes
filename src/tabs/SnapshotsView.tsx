@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { Clock3Icon, CameraIcon, Trash2Icon } from "../components/Icon";
 import { TailPath } from "../components/TailPath";
-import { EmptyState } from "../components/buttons";
+import { EmptyState, Spinner } from "../components/buttons";
 import { invoke } from "../lib/ipc";
 import { bytes } from "../lib/format";
 import { useScanStore } from "../state/scan";
@@ -190,7 +190,7 @@ export function SnapshotsView() {
           )}
           {diffing && (
             <div className="db-loading-block">
-              <span className="db-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+              <Spinner size={16} />
               <span>Loading both snapshots…</span>
             </div>
           )}

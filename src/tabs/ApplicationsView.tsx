@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { AppWindowIcon, CheckIcon, PackageOpenIcon, RefreshCwIcon, Trash2Icon, ShieldIcon } from "../components/Icon";
 import { TailPath } from "../components/TailPath";
-import { EmptyState } from "../components/buttons";
+import { EmptyState, Spinner } from "../components/buttons";
 import { bytes, relativeAge } from "../lib/format";
 import { invoke } from "../lib/ipc";
 import { useApplicationsStore, type AppEntry, type UninstallResult } from "../state/applications";
@@ -121,7 +121,7 @@ export function ApplicationsView() {
 
       {busy && !apps && (
         <div className="db-loading-block">
-          <span className="db-spinner" />
+          <Spinner />
           <span>Listing registry + Store apps, measuring sizes…</span>
         </div>
       )}

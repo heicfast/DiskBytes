@@ -41,4 +41,24 @@ describe("fitPath middle-ellipsis", () => {
     expect(out).toContain("…");
     expect(out.endsWith("settings.json")).toBe(true);
   });
+
+  it("letter-spacing widens the measurement (never overflows the box)", () => {
+    const path = "C:\\Users\\dev\\Documents\\Visual Studio 2022\\Projects\\index.d.ts";
+    const tight = 200;
+    const noLs = fitPath(path, tight, FONT);
+    const withLs = fitPath(path, tight, FONT, { letterSpacing: 1.5 });
+    // Tracking effectively shrinks the budget → the result is at least
+    // as aggressive at eliding.
+    expect(withLs.length).toBeLessThanOrEqual(noLs.length);
+    expect(withLs).toContain("…");
+    // Measured width incl. tracking must respect the budget.
+    const px = (s: string) => s.length * 6.2 + Math.max(0, s.length - 1) * 1.5;
+    expect(px(withLs)).toBeLessThanOrEqual(tight + 8);
+  });
+
+  it("pad reserves a safety margin", () => {
+    const path = "C:\\Users\\dev\\Documents\\Visual Studio 2022\\Projects\\index.d.ts";
+    const out = fitPath(path, 200, FONT, { pad: 12 });
+    expect(out.length * 6.2).toBeLessThanOrEqual(200 - 12 + 8);
+  });
 });

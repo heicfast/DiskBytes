@@ -11,6 +11,7 @@ import { CheckIcon, LockKeyholeIcon, categoryIcon } from "../../components/Icon"
 import { getFolderView, type FolderViewData } from "../../viz/exploreIpc";
 import { bytes, relativeAge } from "../../lib/format";
 import { useCleanupStore } from "../../state/cleanup";
+import { Spinner } from "../../components/buttons";
 
 const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
 
@@ -90,7 +91,7 @@ export function FoldersMode(props: FoldersModeProps) {
   if (!data) {
     return (
       <div className="db-loading-block">
-        <span className="db-spinner" />
+        <Spinner />
         <span>Loading folders…</span>
       </div>
     );

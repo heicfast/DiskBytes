@@ -6,7 +6,7 @@
  * via CSS breakpoints (caption → depth → wrap).
  */
 import { motion } from "framer-motion";
-import { BubblesIcon, Clock3Icon, FlameIcon, FolderIcon, ListTreeIcon, MindMapIcon, SunburstIcon, TopSizesIcon, TreemapIcon, type AnyIcon } from "../components/Icon";
+import { AgeMapIcon, BubblesIcon, FolderIcon, FlamegraphIcon, ListTreeIcon, MindMapIcon, SunburstIcon, TopSizesIcon, TreemapIcon, type AnyIcon } from "../components/Icon";
 import {
   COLORED_MODES, DEPTH_MODES, MODES, MODE_CAPTIONS, useVizUiStore, type Mode,
 } from "../state/vizUi";
@@ -16,11 +16,11 @@ const MODE_ICONS: Record<Mode, AnyIcon> = {
   Folders: FolderIcon,
   Treemap: TreemapIcon,
   Sunburst: SunburstIcon,
-  Flame: FlameIcon,
+  Flame: FlamegraphIcon,
   Bubbles: BubblesIcon,
   "Mind Map": MindMapIcon,
   "Top Sizes": TopSizesIcon,
-  "Age Map": Clock3Icon,
+  "Age Map": AgeMapIcon,
   List: ListTreeIcon,
 };
 

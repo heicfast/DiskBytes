@@ -43,7 +43,12 @@ pub fn mindmap(
     let total = n.on_disk;
     let cx = width / 2.0;
     let cy = height / 2.0;
-    let r_max = width.min(height) / 2.0 - 6.0;
+    // Reserve the largest possible dot + air so dots and their labels
+    // never clip the canvas edge (the deepest ring sits AT r_max; with
+    // only a 6 px margin, 20-26 px dots at the 12-o'clock start angle
+    // rendered half-off-canvas — VLM audit: "labels clipped by the
+    // container"). Floor keeps tiny windows usable.
+    let r_max = (width.min(height) / 2.0 - DOT_BASE - 8.0).max(48.0);
     let mut cells: Vec<Cell> = Vec::with_capacity(512);
     let mut truncated = false;
     // By-folder families attach at the effective branch root (descend
@@ -252,6 +257,31 @@ mod tests {
     fn invalid_geometry_rejected() {
         let t = build();
         assert!(mindmap(&t, 0, 10.0, 0.0, 2, ColorMode::ByAge, 1).is_err());
+    }
+
+    #[test]
+    fn dots_and_labels_never_clip_the_canvas_bounds() {
+        // Margin regression: the deepest ring sits AT r_max, so the
+        // canvas edge must reserve the largest possible dot radius —
+        // every emitted dot (x, y ± r) must stay inside the canvas.
+        let t = build_single_drive();
+        let w = 900.0f32;
+        let h = 700.0f32;
+        let buf = mindmap(&t, 0, w, h, 3, ColorMode::ByFolder, 1).unwrap();
+        assert!(buf.cells.len() > 4, "tree must emit dots");
+        for c in &buf.cells {
+            if (c.flags & 0b111) != crate::layout::cell_kind::DOT {
+                continue;
+            }
+            let (dot_x, dot_y, dot_r) = (c.g[0], c.g[1], c.g[2]);
+            assert!(
+                dot_x - dot_r >= -0.5
+                    && dot_y - dot_r >= -0.5
+                    && dot_x + dot_r <= w + 0.5
+                    && dot_y + dot_r <= h + 0.5,
+                "dot clips the canvas: ({dot_x},{dot_y}) r={dot_r} in {w}x{h}"
+            );
+        }
     }
 
     /// "This PC" → single "C:" drive → 6 folders with distinct sizes

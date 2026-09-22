@@ -28,6 +28,11 @@
   color: var(--on-pastel);
   flex: none;
 }
+/* Dark: muted tint + theme ink. */
+[data-theme="dark"] .db-hover-chip .db-hc-icon {
+  background: color-mix(in oklab, var(--hc-color, var(--pastel-blue)) 42%, #2a2a2e);
+  color: var(--text);
+}
 .db-hover-chip .db-hc-body {
   min-width: 0;
   display: flex;
@@ -231,8 +236,6 @@
 .db-pop-row .db-pop-path {
   font: 9.5px/1.35 var(--font-mono);
   color: var(--text-tertiary);
-  overflow: hidden;
-  white-space: nowrap;
 }
 .db-pop-row .db-pop-reason {
   color: var(--text-tertiary);

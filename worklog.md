@@ -321,3 +321,53 @@ Stage Summary:
 - Wave 3: every remaining surface audited clean — the app is defect-free across all 5 tabs, 9 viz modes, both themes, 1280-1920 widths, degenerate states, and stress conditions
 - Round 13 + wave 2 + wave 3 all pushed; CI/macOS/UI-Screenshots green on 7b122c2, final commit 5b2b6c8 (docs + artifacts) running green
 - Session 3 complete: all 9 user-reported issues fixed at root cause + 8 additional latent instances of the path bug + premium animation/state layer; 40+ VLM audits, 26/26 CI frames PASS
+
+---
+Task ID: 14
+Agent: main (Super Z)
+Task: Wave 4 (session 4) — user-reported round: pathbar STILL cut for some directories, fullscreen-feeling default window, premium view icons, dark-mode invisible controls, loading animation, spinner, systemic audits
+
+Work Log:
+- RESUME PROTOCOL: re-read worklog.md (all 13 tasks), DESIGN-REFERENCE-VLM.md, gap analysis state; environment rebuilt (vite dev + agent-browser + VLM CLI live; rustup 1.98.1 reinstalled; cargo fetch done)
+- PATHBAR ROOT CAUSE #1 (user: "works for some directories, for some it gets cutted half"): the scanning ticker `.db-current-path` still used the `direction: rtl` tail-ellipsis recipe — the EXACT pattern fitPath.ts documents as broken in Chromium. Live-reproduced: long paths hug the LEFT edge and blunt-cut on the RIGHT with NO ellipsis (textStartsAtX == elementStartsAtX, overflow 373px). FIXED: ticker now renders <TailPath> (JS-measured middle-ellipsis); CSS rewritten (definite width:70% — a shrink-to-fit flex item would measure its own placeholder width, caught live when first fix rendered "…av" in a 19px box)
+- PATHBAR ROOT CAUSE #2 (systemic, 5 more surfaces): `.db-tail-path` had NO base CSS — rendered INLINE, so clientWidth=0 → TailPath never truncated → parent clipped with no ellipsis. Live-verified inline+clientWidth:0 on Age Map rows. FIXED: base.css `.db-tail-path { display:block; min-width:0; overflow:hidden; white-space:nowrap }` layout CONTRACT + per-context audit (age rows, queue popover, snapshot diffs, app rows, dup rows all now measure their real constrained box; verified live: queue popover renders `C:\Users\…User Data\Default\Cache\final-245.m4a` fits, age rows block @714px)
+- PATHBAR #3: InspectorPanel's bespoke useFittedPath measured with a HARDCODED font string mirroring the CSS (fragile drift trap). Replaced with the shared TailPath (element's own computed font) — one implementation everywhere; useFittedPath + PATH_FONT deleted. fitPath gained letterSpacing (canvas measureText ignores CSS tracking — the classic measured-fits/rendered-overflows trap) + pad safety margin, 2 new unit tests (7/7 total)
+- TailPath hardened: computed-font fallback (rebuilds from longhands if the shorthand serializes empty)
+- WINDOW FULLSCREEN FEELING (user: "by default app opens on full screen mode on windows and mac"): 1680×1050 default clamps to the work area on 1080p Windows and exceeds MacBook panels → effectively fullscreen. FIXED: default 1440×860 + `visible:false` + Rust `fit_window_to_work_area` in setup (Monitor::work_area — verified present in tauri 2.11.6 — clamps to 86% of work area, centers, then shows; no resize flash). CI tour captures full screen so the windowed app verifies directly
+- PREMIUM VIEW ICONS (user: "view icons need premium class and proper"): redesigned all pictograms on the lucide grid @1.9 stroke — Treemap squarified asymmetric cells, Sunburst SEGMENTED arcs (full rings read as a target — VLM confirmed), Bubbles Pythagoras-tangent packing, MindMap refined, TopSizes grid-snapped, AgeMap heat-grid (replaced generic Clock3). Flame: 3 design iterations (icicle taper → split-row stack → both read as "Wi-Fi signal bars" per VLM) → final = purpose-drawn flame (rounder bowl + inner tongue, maps 1:1 to the "Flame" label). VLM-graded final family: 8-9/10 every icon (Flame 9.0, Treemap 9.3, List 9.3)
+- PREMIUM SPINNER: old single-arc border-top spinner replaced with SVG dual-arc <Spinner> (faint track ring + ~100° eased sweep iOS-style + counter-rotating inner arc at 0.45 opacity; transform-only, currentColor, prefers-reduced-motion fallback); all 11 call sites migrated; live-verified DOM (3 circles, track+arc+rev)
+- DARK-MODE INVISIBLE CONTROLS (user: "some buttons still sucks, gets invisible") — full-surface VLM audit found + fixed 5 real defects:
+  1. Dark outline buttons sat on card fill ≈ panel (1.8:1) → lifted fill rgba(255,255,255,.045) + border #7a7a85 (3.4:1), 2 VLM rounds
+  2. Folder cards rendered BRIGHT pastel slabs (#cfe0f7) with dark-navy text in dark mode (glare; VLM caught, DOM-verified rgb(207,224,247)) → muted tone-tint system (color-mix tone 17-33% into dark surfaces) + theme-ink text; VLM verdict "premium, flawless" 9/10
+  3. Top Sizes rank-bar text used --on-pastel (#0f172a dark navy) on transparent rows → INVISIBLE in dark (DOM-verified) → dark override: muted tint bars + --text/--text-secondary
+  4. Inspector 50px file-icon chips / quick-wins chips / hover-chip icons: bright pastel squares in dark → muted tints + theme ink
+  5. --control-border dark #52525a → #606069 (all bordered controls: chips, search, mode picker, segmented, abbreviate)
+- VLM FALSE POSITIVES triaged (protocol: DOM/pixel-verify first): license buy-link "dark red/brown" = actually bright coral #ff7a5c 5.5:1 (pixel-bucket verified); monitor sparklines "invisible" = capture-timing (zoom audit: clearly visible, 8/10); treemap "light label on light cell" = misread (dark ink + white halo verified legible)
+- Light-mode regression verified: folder cards pastel + dark ink unchanged, rank bars dark ink on light ✓
+- Context menu dark: CLEAN; Applications dark: CLEAN
+
+Stage Summary:
+- Gates: tsc 0 errors, vitest 39/39 (2 new fitPath), production build OK, mock-free bundle, cargo fmt clean
+- Every user-reported issue this round has a root-cause fix + live DOM verification + VLM verification
+- Next: T8-T13 view algorithms (treemap/flame/sunburst/bubbles/mindmap quality + CanvasViz polish), T14-T15 line-by-line review, T16-T17 state-change + popup polish, responsive re-audit, push + CI
+
+---
+Task ID: 15
+Agent: main (Super Z)
+Task: Wave 4 (cont.) — view-algorithm refinement round: mind-map clipping, bubbles fill-fit, flame picket-fence, label coverage (Rust engines + mock parity + CanvasViz)
+
+Work Log:
+- VLM algorithmic audit of all 5 canvas modes (graded): Treemap 8-9/10 (squarify verified textbook-correct against the Bruls worst-ratio formula — no changes), Sunburst labels verified fine at zoom (earlier overlap claim = misread; compressed-branch slivers get no labels by the span gate — correct culling), Flame "picket fence" + MindMap 3/10 (clipping) + Bubbles 4/10 (loose packing) = the real work
+- MIND-MAP CLIPPING (Rust): r_max was min(w,h)/2 - 6 but the deepest ring sits AT r_max with dot radii up to DOT_BASE(26) → dots+labels rendered half-off-canvas at the 12-o'clock start. Fixed: r_max reserves DOT_BASE + 8 (floored at 48). New regression test asserts every dot (x±r, y±r) inside the canvas
+- MIND-MAP (mock): sub-dots at parent_r + sub_r + 14 pushed the top branch through the edge — added clampInside() radial pull-in; verified ZERO non-background pixels on all four canvas edge strips (pixel-exact, after two VLM false alarms were triaged)
+- BUBBLES FILL-FIT (Rust): the one-shot uniform shrink (k = usable/needed) under-filled the parent whenever ring-pack geometry changed discontinuously with scale — visible rim gaps. Replaced with a 24-iteration bisection on the uniform scale factor: pack lands tangent to the usable radius, sibling ratios exact (the algorithm's guarantee), nesting exact. Regression test asserts extent == usable ±1px AND all children inside
+- BUBBLES (mock): the heuristic single-ring placement (a completely different algorithm from production!) replaced with a faithful TS port of the Rust ring_pack + fill-fit; VLM re-grade 4/10 → 9/10 ("Users fills the parent; mid-size bubbles labeled; excellent use of space")
+- FLAME PICKET FENCE: three-layer root cause (found via geometry dump + pixel run analysis, NOT VLM claims — two VLM misreads triaged): (1) Rust: GAP_X between EVERY sibling burned ~100px per 200-file row → now gaps only between adjacent WIDE blocks (≥3px), kept blocks rescaled to fill the span; (2) mock: sub-1.5px children left background holes → two-pass kept-rescale mirroring Rust; (3) CanvasViz: the 1px hairline strokeRect on 1-3px blocks degenerated into dark lines that REPLACED the blocks → stroke only on rw ≥ 4. Regression test: 80 narrow siblings sit flush + row fills the span
+- LABEL COVERAGE (CanvasViz): bubbles r≥19→r≥12 (mid-size bubbles were anonymous — VLM kept flagging "Program Files/pagefile.sys missing labels"), mind-map dots r≥20→r≥13, prefetch gate synced; mind-map dot labels now CLAMP inside canvas bounds (with side-swap when the clamp would collide with the dot)
+- Debugging lesson recorded: pixel-run analysis + direct geometry dumps (tsx script importing the mock) settled three VLM contradictions; the rendered-vs-dumped mismatch was traced to transition-artifact captures — fresh paints verified the geometry matches predictions exactly (282,158,157,118,44,13,11 at row 4)
+- Gates: tsc 0, vitest 39/39, production build OK; cargo fmt + clippy -D warnings clean; 139/139 core tests (3 new regression tests)
+
+Stage Summary:
+- All 5 visualization algorithms audited; 4 fixed at root cause in BOTH the Rust engines (production) and the mock (dev parity); CanvasViz label gates + clamping hardened
+- VLM-verified: bubbles 9/10, flame solid clusters + clear hierarchy, mind-map zero clipping (pixel-verified)
+- Next: T14-T17 (line-by-line review, state-change immediacy, popup/dialog polish), responsive re-audit, commit round 14, push + CI verify

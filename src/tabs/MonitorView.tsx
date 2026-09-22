@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIcon, CpuIcon, HardDriveIcon, MemoryStickIcon, WifiIcon } from "../components/Icon";
-import { EmptyState } from "../components/buttons";
+import { EmptyState, Spinner } from "../components/buttons";
 import { invoke, listen } from "../lib/ipc";
 import { bytes } from "../lib/format";
 
@@ -112,7 +112,7 @@ export function MonitorView() {
     return (
       <div className="db-tab db-scroll">
         <div className="db-loading-block">
-          <span className="db-spinner" />
+          <Spinner />
           <span>Starting sampler (2 s cadence)…</span>
         </div>
       </div>

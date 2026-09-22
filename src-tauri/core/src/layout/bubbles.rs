@@ -198,19 +198,42 @@ fn emit(
         return;
     }
     ring_pack(&mut kids);
-    // Shrink the whole level uniformly when the pack exceeds the usable
-    // radius (preserves every sibling ratio exactly; nesting stays exact).
-    let needed = kids
-        .iter()
-        .map(|&(_, x, y, r)| (x * x + y * y).sqrt() + r)
-        .fold(0.0f32, f32::max);
+    let extent = |ks: &[Placed]| {
+        ks.iter()
+            .map(|&(_, x, y, r)| (x * x + y * y).sqrt() + r)
+            .fold(0.0f32, f32::max)
+    };
+    let needed = extent(&kids);
     if needed > usable && needed > 0.0 {
-        let k = usable / needed;
-        for kid in &mut kids {
-            kid.1 *= k;
-            kid.2 *= k;
-            kid.3 *= k;
+        // Fill-fit: bisect the largest uniform scale whose ring pack
+        // still fits `usable`. The old one-shot shrink (k = usable /
+        // needed) under-filled the parent whenever the pack geometry
+        // changed discontinuously with scale — visible as a gap between
+        // the children and the parent rim (VLM: "massive unutilized
+        // gaps"). The pack now ends tangent to the inner rim, and the
+        // uniform scale keeps every sibling ratio exact (the
+        // algorithm's core guarantee) with nesting still exact.
+        let base: Vec<f32> = kids.iter().map(|k| k.3).collect();
+        let pack_at = |ks: &mut Vec<Placed>, s: f32| {
+            for (k, br) in ks.iter_mut().zip(base.iter()) {
+                k.3 = s * br;
+                k.1 = 0.0;
+                k.2 = 0.0;
+            }
+            ring_pack(ks);
+            extent(ks)
+        };
+        let mut lo = 0.0f32; // feasible (degenerate point)
+        let mut hi = 1.0f32; // infeasible (extent(1.0) = needed > usable)
+        for _ in 0..24 {
+            let mid = 0.5 * (lo + hi);
+            if pack_at(&mut kids, mid) <= usable {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
         }
+        let _ = pack_at(&mut kids, lo);
     }
     for (i, (child_idx, x, y, r)) in kids.iter().enumerate() {
         emit(
@@ -432,5 +455,41 @@ mod tests {
             "nested bubbles must inherit distinct branch families"
         );
         assert!(nested.iter().all(|c| c.rgba & 0xFF == ALPHA_NESTED));
+    }
+
+    #[test]
+    fn fill_fit_packs_children_to_the_rim_no_loose_gap() {
+        // Fill-fit regression: the old one-shot shrink left the level
+        // floating loose inside the parent (a visible rim gap) whenever
+        // the ring-pack extent changed discontinuously with scale. The
+        // bisection must land the pack tangent to the usable radius.
+        let t = build();
+        let buf = bubbles(&t, 0, 800.0, 800.0, 2, ColorMode::ByType, 1).unwrap();
+        // Root circle (depth 0) centered, radius = 400 - 2.
+        let root = buf.cells.iter().find(|c| c.depth == 0).unwrap();
+        let usable = root.g[2] - PAD;
+        let kids: Vec<&Cell> = buf.cells.iter().filter(|c| c.depth == 1).collect();
+        assert!(!kids.is_empty());
+        // Every child fully inside the parent's usable radius (nesting
+        // exact) …
+        for k in &kids {
+            let d = ((k.g[0] - root.g[0]).powi(2) + (k.g[1] - root.g[1]).powi(2)).sqrt();
+            assert!(
+                d + k.g[2] <= usable + 0.75,
+                "child exceeds the usable radius: d+r={} usable={}",
+                d + k.g[2],
+                usable
+            );
+        }
+        // … and the LARGEST extent lands on the rim (fill, not loose):
+        // the pack's outermost child reaches within a hair of usable.
+        let extent: f32 = kids
+            .iter()
+            .map(|k| ((k.g[0] - root.g[0]).powi(2) + (k.g[1] - root.g[1]).powi(2)).sqrt() + k.g[2])
+            .fold(0.0, f32::max);
+        assert!(
+            (usable - extent).abs() <= 1.0,
+            "pack must fill the usable radius (extent {extent} vs usable {usable})"
+        );
     }
 }

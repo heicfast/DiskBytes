@@ -28,6 +28,12 @@
   flex: none;
   box-shadow: var(--shadow-1);
 }
+/* Dark: muted tone tint + theme ink (a 50 px bright pastel square is
+ * glare on the dark inspector). */
+[data-theme="dark"] .db-file-icon {
+  background: color-mix(in oklab, var(--tone, var(--pastel-blue)) 30%, #242427);
+  color: var(--text);
+}
 .db-inspector-title > div {
   min-width: 0;
 }
@@ -58,12 +64,11 @@
   margin: 15px 0 8px;
   color: var(--text-secondary);
   font: 10px/1.55 var(--font-mono);
-  /* Truncation is JS-side (fitPath middle-ellipsis, canvas-measured) —
-   * the old `direction: rtl` + `unicode-bidi: plaintext` pair silently
-   * clipped long paths with NO ellipsis (plaintext re-derived an LTR
-   * paragraph from "C:", defeating the head-ellipsis). */
-  white-space: nowrap;
-  overflow: hidden;
+  /* Truncation is JS-side: <TailPath> middle-ellipsizes with the
+   * element's OWN computed font (canvas-measured, letter-spacing
+   * aware) — the shared, always-accurate path fitter. The old CSS
+   * recipes (`direction: rtl` pair, and a hardcoded mirror-font
+   * canvas measure) both clipped long paths with no ellipsis. */
   user-select: text;
   padding: 8px 10px;
   background: var(--card);

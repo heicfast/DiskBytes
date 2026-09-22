@@ -111,3 +111,19 @@ export function EmptyState({
     </div>
   );
 }
+
+/** Premium dual-arc loading spinner (replaces the old single-arc
+ * border-top spinner — dated and visually noisy). The design language:
+ * a faint full-ring track grounds the spinner, the main ~100° arc
+ * sweeps with an ease-in-out rotation (the iOS/macOS "organic sweep")
+ * while a smaller inner arc counter-rotates for depth. Compositor-only
+ * (transform), round linecaps, currentColor. */
+export function Spinner({ size = 22, weight = 2.6 }: { size?: number; weight?: number }) {
+  return (
+    <svg className="db-spinner" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9.4" stroke="currentColor" className="db-spin-track" strokeWidth={Math.max(1.4, weight - 1.1)} />
+      <circle cx="12" cy="12" r="9.4" stroke="currentColor" className="db-spin-arc" strokeWidth={weight} strokeLinecap="round" strokeDasharray="16.4 42.7" />
+      <circle cx="12" cy="12" r="5.7" stroke="currentColor" className="db-spin-arc-rev" strokeWidth={Math.max(1.6, weight - 0.7)} strokeLinecap="round" strokeDasharray="7.5 28.3" />
+    </svg>
+  );
+}

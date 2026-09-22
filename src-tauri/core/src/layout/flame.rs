@@ -15,6 +15,9 @@ use crate::scan::node::Tree;
 const MIN_W: f32 = 1.0;
 /// Horizontal gap between sibling blocks.
 const GAP_X: f32 = 0.5;
+/// Blocks narrower than this sit flush (no gap) — the fine texture of
+/// many small files renders solid instead of striped (picket-fence fix).
+const GAP_MIN_W: f32 = 3.0;
 
 /// Layout the subtree under `node` as a flame/icicle chart.
 ///
@@ -123,29 +126,64 @@ fn layout_row(
     }
     let y = (depth_here - 1) as f32 * row_h;
     let span = x1 - x0;
-    let n_gaps = children.len().saturating_sub(1) as f32;
-    let usable = (span - GAP_X * n_gaps).max(0.0);
+    // Pre-pass: kept children (share of `total`, ≥ MIN_W) with widths.
+    // Gaps are only inserted between adjacent WIDE blocks (≥ GAP_MIN_W):
+    // the fine "picket fence" of narrow file blocks renders flush (solid
+    // texture) instead of striped by half-pixel gutters — with hundreds
+    // of siblings the old GAP_X-per-pair burned ~100 px of span and
+    // amplified the comb effect (VLM: "picket fence noise").
+    let kept: Vec<(u32, f32)> = children
+        .iter()
+        .filter_map(|&id| {
+            let c = tree.node(id)?;
+            if c.is_removed() || c.on_disk == 0 {
+                return None;
+            }
+            let w = c.on_disk as f32 / total as f32 * span;
+            (w >= MIN_W).then_some((id, w))
+        })
+        .collect();
+    if kept.is_empty() {
+        return;
+    }
+    let gaps: Vec<f32> = kept
+        .windows(2)
+        .map(|p| {
+            if p[0].1 >= GAP_MIN_W && p[1].1 >= GAP_MIN_W {
+                GAP_X
+            } else {
+                0.0
+            }
+        })
+        .collect();
+    let gap_total: f32 = gaps.iter().sum();
+    // Rescale kept widths to the gap-adjusted usable span (ratios among
+    // drawn blocks stay exact).
+    let kept_total: f32 = kept.iter().map(|k| k.1).sum();
+    let usable = (span - gap_total).max(0.0);
+    let scale = if kept_total > 0.0 {
+        usable / kept_total
+    } else {
+        0.0
+    };
     let mut cursor = x0;
-    for (i, &id) in children.iter().enumerate() {
+    for (slot, &(id, w_raw)) in kept.iter().enumerate() {
         if cells.len() >= MAX_CELLS {
             *truncated = true;
             return;
         }
-        let c = tree.node(id).expect("child id");
-        if c.is_removed() || c.on_disk == 0 {
-            continue;
-        }
-        let w = c.on_disk as f32 / total as f32 * usable;
+        let c = tree.node(id).expect("kept child id");
+        let w = w_raw * scale;
         if w < MIN_W {
-            continue; // Skip sub-1px blocks.
+            continue; // Rounding edge after rescale.
         }
         // One pastel family per effective top-level branch, inherited by
         // every descendant (shade still varies by depth + sibling index).
-        let fam = if node == branch_root { i } else { top_index };
+        let fam = if node == branch_root { slot } else { top_index };
         let rgba = pack_rgba(match color {
-            ColorMode::ByFolder => node_color(tree, id, color, now, fam, depth_here as u16, i),
+            ColorMode::ByFolder => node_color(tree, id, color, now, fam, depth_here as u16, slot),
             ColorMode::ByType => c.category().color(),
-            ColorMode::ByAge => node_color(tree, id, color, now, 0, 0, i),
+            ColorMode::ByAge => node_color(tree, id, color, now, 0, 0, slot),
         });
         cells.push(Cell::rect(id, depth_here as u16, rgba, cursor, y, w, row_h));
         if c.is_dir() && c.child_count > 0 && depth_left > 1 {
@@ -165,7 +203,7 @@ fn layout_row(
                 branch_root,
             );
         }
-        cursor += w + GAP_X;
+        cursor += w + gaps.get(slot).copied().unwrap_or(0.0);
     }
 }
 
@@ -231,5 +269,47 @@ mod tests {
         }
         // No sub-1px blocks.
         assert!(buf.cells.iter().all(|c| c.g[2] >= MIN_W - f32::EPSILON));
+    }
+
+    #[test]
+    fn narrow_siblings_sit_flush_no_picket_fence_gaps() {
+        // Picket-fence regression: many narrow file blocks must render
+        // flush (no half-pixel gutters between them); gaps only appear
+        // between WIDE blocks. Also verifies the row still fills its
+        // span (kept blocks rescaled to the gap-adjusted usable span).
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "C:\\P");
+        let mut batch = vec![dir("many")];
+        for i in 0..80 {
+            batch.push(file(&format!("f{i:03}.bin"), 10, 10, 1));
+        }
+        t.append_batch(0, batch);
+        t.append_batch(1, vec![file("big", 4000, 4000, 1)]);
+        rollup::finalize(&mut t);
+        let buf = flame(&t, 0, 1000.0, 300.0, 2, ColorMode::ByType, 1).unwrap();
+        let row1: Vec<&Cell> = buf.cells.iter().filter(|c| c.depth == 1).collect();
+        // The narrow files (10/4800 share ≈ 2.1 px < GAP_MIN_W) sit flush:
+        // consecutive narrow blocks touch (next.x == prev.x + prev.w).
+        let mut narrow_pairs = 0;
+        for w in row1.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if a.g[2] < GAP_MIN_W && b.g[2] < GAP_MIN_W {
+                narrow_pairs += 1;
+                assert!(
+                    (b.g[0] - (a.g[0] + a.g[2])).abs() < 0.05,
+                    "narrow blocks must sit flush: a ends {} b starts {}",
+                    a.g[0] + a.g[2],
+                    b.g[0]
+                );
+            }
+        }
+        assert!(narrow_pairs >= 10, "expected many flush narrow pairs");
+        // The row fills the span: last block's right edge ≈ width (the
+        // wide dir block takes the gap-adjusted remainder).
+        let right = row1.iter().map(|c| c.g[0] + c.g[2]).fold(0.0f32, f32::max);
+        assert!(
+            (1000.0 - right).abs() <= 1.0,
+            "row must fill the span, right edge {right}"
+        );
     }
 }

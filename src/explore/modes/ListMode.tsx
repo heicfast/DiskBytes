@@ -9,6 +9,7 @@ import { ChevronRightIcon, FolderIcon, LockKeyholeIcon, CloudIcon } from "../../
 import { categoryIcon } from "../../components/Icon";
 import { getListChildren, type ListRowData } from "../../viz/exploreIpc";
 import { bytes } from "../../lib/format";
+import { Spinner } from "../../components/buttons";
 
 interface FlatRow extends ListRowData {
   level: number;
@@ -72,7 +73,7 @@ export function ListMode(props: ListModeProps) {
   if (!tree) {
     return (
       <div className="db-loading-block">
-        <span className="db-spinner" />
+        <Spinner />
         <span>Building outline…</span>
       </div>
     );

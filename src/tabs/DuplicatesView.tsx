@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { CopyIcon, FileIcon, SearchIcon, CheckIcon, Trash2Icon } from "../components/Icon";
 import { TailPath } from "../components/TailPath";
-import { EmptyState } from "../components/buttons";
+import { EmptyState, Spinner } from "../components/buttons";
 import { invoke } from "../lib/ipc";
 import { bytes } from "../lib/format";
 import { useScanStore } from "../state/scan";
@@ -121,7 +121,7 @@ export function DuplicatesView() {
 
       {busy && (
         <div className="db-loading-block">
-          <span className="db-spinner" />
+          <Spinner />
           <span>Hashing candidates (size groups → 64 KB prefix → full)…</span>
         </div>
       )}
