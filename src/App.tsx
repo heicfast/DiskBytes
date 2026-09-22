@@ -110,9 +110,10 @@ function AppShell() {
     // an explicit user toggle always wins over this one-time nudge.
     const v = useViewStore.getState();
     if (!v.inspectorTouched) v.setInspectorVisible(true);
+    // CI tour hook: the DISKBYTES_SCAN dev-hook target lands in Recents
+    // here (user-started scans are pushed on the scanning transition
+    // below — the dev hook bypasses the UI click).
     void (async () => {
-      const st = await invoke<{ progress: { currentPath: string } }>("get_status").catch(() => null);
-      void st;
       try {
         const hooks = await invoke<{ scan: string | null }>("get_dev_hooks").catch(() => null);
         if (hooks?.scan) pushRecent(hooks.scan);

@@ -55,8 +55,8 @@ fn fit_window_to_work_area(app: &tauri::App) {
         let area = monitor.work_area();
         let scale = monitor.scale_factor();
         // Work area is physical px; convert to logical for LogicalSize.
-        let area_w = area.size.width as f64 / scale;
-        let area_h = area.size.height as f64 / scale;
+        let area_w = f64::from(area.size.width) / scale;
+        let area_h = f64::from(area.size.height) / scale;
         if area_w > 100.0 && area_h > 100.0 {
             let w = DEFAULT_WINDOW_W.min((area_w * WORK_AREA_FRACTION).floor());
             let h = DEFAULT_WINDOW_H.min((area_h * WORK_AREA_FRACTION).floor());
