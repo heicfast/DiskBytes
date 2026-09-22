@@ -76,15 +76,15 @@ pub fn resolve_path(
     generation: u64,
     path: String,
     state: State<'_, AppState>,
-) -> Result<Option<u32>, String> {
+) -> Option<u32> {
     let guard = state.tree.read();
     let Some(tree) = guard.as_ref() else {
-        return Ok(None);
+        return None;
     };
     if tree.generation != generation {
-        return Ok(None);
+        return None;
     }
-    Ok(tree.resolve_display_path(&path))
+    tree.resolve_display_path(&path)
 }
 
 /// The disk storage snapshot (spec §6.5) for the volume containing the

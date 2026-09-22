@@ -286,7 +286,7 @@ pub fn get_status(state: State<'_, AppState>) -> StatusResponse {
 /// completed in the cancel window still emits its `scan-done`).
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // State extraction is the tauri command contract
-pub fn cancel_scan(state: State<'_, AppState>) -> Result<bool, String> {
+pub fn cancel_scan(state: State<'_, AppState>) -> bool {
     let running = {
         let scan = state.scan.lock();
         match scan.as_ref() {
@@ -302,7 +302,7 @@ pub fn cancel_scan(state: State<'_, AppState>) -> Result<bool, String> {
         // false (idempotent).
         state.scanning.store(false, Ordering::SeqCst);
     }
-    Ok(running)
+    running
 }
 
 /// Swap the finished tree in, dropping the old `Arc<Tree>` on a
