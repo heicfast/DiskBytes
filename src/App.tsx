@@ -106,6 +106,10 @@ function AppShell() {
   useEffect(() => {
     if (status !== "done") return;
     useExploreStore.getState().resetNavigation();
+    // First completed scan reveals the inspector (details exist now);
+    // an explicit user toggle always wins over this one-time nudge.
+    const v = useViewStore.getState();
+    if (!v.inspectorTouched) v.setInspectorVisible(true);
     void (async () => {
       const st = await invoke<{ progress: { currentPath: string } }>("get_status").catch(() => null);
       void st;

@@ -11,6 +11,9 @@ export type TabId = "explore" | "duplicates" | "applications" | "monitor" | "sna
 export interface ViewStore {
   tab: TabId;
   inspectorVisible: boolean;
+  /** True once the user has explicitly toggled the inspector — the
+   * first-scan auto-reveal never overrides an explicit choice. */
+  inspectorTouched: boolean;
   /** Name filter for Folders / Top Sizes / List (spec M4.15). */
   nameFilter: string;
   setTab: (tab: TabId) => void;
@@ -21,10 +24,11 @@ export interface ViewStore {
 
 export const useViewStore = create<ViewStore>((set) => ({
   tab: "explore",
-  inspectorVisible: true,
+  inspectorVisible: false,
+  inspectorTouched: false,
   nameFilter: "",
   setTab: (tab) => set({ tab }),
-  toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
-  setInspectorVisible: (inspectorVisible) => set({ inspectorVisible }),
+  toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible, inspectorTouched: true })),
+  setInspectorVisible: (inspectorVisible) => set({ inspectorVisible, inspectorTouched: true }),
   setNameFilter: (nameFilter) => set({ nameFilter }),
 }));

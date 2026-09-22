@@ -220,3 +220,19 @@ Work Log:
 Stage Summary:
 - Round 11 ready: preview footer + round-10 artifacts
 - 10 consecutive green rounds; long-loop continues
+
+---
+Task ID: 9
+Agent: main (Super Z)
+Task: Round 12 — welcome-state composition (state-aware inspector), accessibility spot-checks
+
+Work Log:
+- VLM cold-start audit found the ghost inspector ("Scan something to see details…") unbalancing the first-run welcome; fix: inspector is now STATE-AWARE — hidden until the first scan completes (welcome hero centered in the full main area, VLM verdict PRODUCTION-READY), auto-revealed on first scan-done, and an explicit user toggle always wins (new inspectorTouched guard in the view store; both toggle and set mark it)
+- Focus-visible audit: 2px focus ring on all interactive elements (keyboard), suppressed for mouse — accessibility solid
+- DOM-verified: cold start inspector=false + toggle inactive; after first scan inspector=true
+- vitest 32/32, typecheck 0 errors
+- Round 11 (dd093ff) all 3 workflows running
+
+Stage Summary:
+- Round 12 ready: state-aware inspector + welcome composition
+- CI loop continues; every user-reported issue remains fixed and verified through round 10 artifacts (26/26 PASS ×3 consecutive rounds)
