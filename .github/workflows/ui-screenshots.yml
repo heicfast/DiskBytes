@@ -62,25 +62,27 @@ jobs:
             "$root\Windows\WinSxS\amd64_microsoft-windows-sbscomponents_31bf3856ad364e35","$root\Windows\Installer", `
             "$root\ProgramData\Package Cache\{9f1e2d3a}","$root\Games\Starfield\Data","$root\Games\Steam\steamapps\common" | Out-Null
           # Big sparse files (instant on NTFS): media + VM images + pagefile-like.
-          # Top-level branches are BALANCED (~4-10 GB each) so the by-folder
-          # pastel families are all visible in treemap/sunburst screenshots
-          # (an earlier unbalanced tree rendered one 99% branch = monochrome).
+          # Top-level branches are BALANCED so the by-folder pastel families
+          # are all visible in treemap/sunburst screenshots (an unbalanced
+          # tree rendered one 99% branch = monochrome). TOTAL <= ~15 GB —
+          # the windows-latest runner has limited free disk; a larger set
+          # exhausted C: and failed the staging step (run 35708696513).
           fsutil file createnew "$root\Users\dev\Videos\holiday-4k.mp4" 2684354560
           fsutil file createnew "$root\Users\dev\Videos\render-final.mp4" 1288490188
-          fsutil file createnew "$root\Users\dev\Downloads\ubuntu-26.04.iso" 4294967296
-          fsutil file createnew "$root\Users\dev\Downloads\backup-2026.qcow2" 3221225472
+          fsutil file createnew "$root\Users\dev\Downloads\ubuntu-26.04.iso" 2147483648
+          fsutil file createnew "$root\Users\dev\Downloads\backup-2026.qcow2" 1342177280
           fsutil file createnew "$root\Users\dev\Pictures\raw-shoot-001.cr3" 104857600
           fsutil file createnew "$root\Users\dev\Documents\annual-report.pdf" 47185920
-          fsutil file createnew "$root\pagefile.sys" 4294967296
-          fsutil file createnew "$root\hiberfil.sys" 2147483648
-          fsutil file createnew "$root\Program Files\Adobe\Adobe Photoshop 2027\Photoshop.exe" 6442450944
-          fsutil file createnew "$root\Program Files\Adobe\Adobe Photoshop 2027\Resources\psresources.psr" 2147483648
-          fsutil file createnew "$root\Program Files\Google\Chrome\Application\chrome.exe" 3221225472
-          fsutil file createnew "$root\Windows\WinSxS\amd64_microsoft-windows-sbscomponents_31bf3856ad364e35\component.store" 6442450944
-          fsutil file createnew "$root\Windows\Installer\a7f3c2e1.msi" 4294967296
-          fsutil file createnew "$root\ProgramData\Package Cache\{9f1e2d3a}\dotnet-runtime-10.0.4.exe" 3221225472
-          fsutil file createnew "$root\Games\Starfield\Data\Starfield.esm" 8589934592
-          fsutil file createnew "$root\Games\Steam\steamapps\common\shadercache.bin" 5368709120
+          fsutil file createnew "$root\pagefile.sys" 1503238554
+          fsutil file createnew "$root\hiberfil.sys" 805306368
+          fsutil file createnew "$root\Program Files\Adobe\Adobe Photoshop 2027\Photoshop.exe" 1342177280
+          fsutil file createnew "$root\Program Files\Adobe\Adobe Photoshop 2027\Resources\psresources.psr" 536870912
+          fsutil file createnew "$root\Program Files\Google\Chrome\Application\chrome.exe" 805306368
+          fsutil file createnew "$root\Windows\WinSxS\amd64_microsoft-windows-sbscomponents_31bf3856ad364e35\component.store" 1342177280
+          fsutil file createnew "$root\Windows\Installer\a7f3c2e1.msi" 805306368
+          fsutil file createnew "$root\ProgramData\Package Cache\{9f1e2d3a}\dotnet-runtime-10.0.4.exe" 805306368
+          fsutil file createnew "$root\Games\Starfield\Data\Starfield.esm" 1342177280
+          fsutil file createnew "$root\Games\Steam\steamapps\common\shadercache.bin" 805306368
           # Medium + small real files across categories
           1..30 | ForEach-Object {
             $bytes = New-Object byte[] (Get-Random -Minimum 4096 -Maximum 2097152)

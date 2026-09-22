@@ -67,3 +67,21 @@ Stage Summary:
 - npm run typecheck PASS; npm test 30/30 PASS (decode contract untouched)
 - Mock semantics verified against Task C's landed Rust `effective_branch_root` (same descent rule; chain nodes get family 0 on both sides)
 - Deviations (all color-only, within scope): TONE_BASE swapped to core FAMILIES palette; shade formula now mirrors core (depth+parity) per "shade varies by depth + sibling index"; legend groups re-based to branch-root children; center-label clip interpreted as r*1.7 (consistent with existing CIRCLE label r*1.6 pattern); chose shadowBlur halo over 2px dark halo for the center label
+
+---
+Task ID: 1
+Agent: main (Super Z)
+Task: Round 1+2 — parallel tracks (A: CSS/components by main; B: canvas+mock by subagent; C: Rust colors by subagent), critical panic fix, CI verification loop
+
+Work Log:
+- Launched parallel subagents: Track C (Rust by-folder color families: effective_branch_root helper + threading through all 5 engines, sunburst coral center 0.16, bubbles alpha tiers 0xB4/0xD9, mindmap 0xFF/0xCC; 132→133 tests, clippy+fmt clean) and Track B (CanvasViz: sunburst center label with root name+size, mind-map colored links 45% alpha, selection double-ring, treemap white separators; mock/layouts.ts rewritten for family parity — monochrome bug fixed; screenshots verified in shots/trackB*)
+- Track A (main): tokens.css (--ink-grad, --ink-glow, --used-tint light+dark); CTA gradient+glow (scan button, cleanup button, brand mark, tab pill, mode pill); ring gauge 88px/11px stroke + inset shadows; H1 27px/730; section rhythm 24px; notice red tint; segmented active inset ring; folder card hover shadow; rank-bar/age-bar gradients + pill ends; list bar 6px; inspector 28px/760 size; path box inset; tabs polish (dup headers 680 + wasted red, stage tag hover, app rows tighter + shadow, leftovers pill, process zebra); dialog action equal heights; hover chip padding; responsive audit 1280-1920 all clean
+- VLM verification loop: folders/treemap vs reference — multi-family palette confirmed; dark theme excellent; by-type/by-age verified with client-side group labels
+- CRITICAL BUG FOUND via CI app-stderr: panic at core/src/scan/node.rs:299 — synthetic regroup ids (0xFFFF0000+n from by-type/by-age layouts) reached names_batch → name() → direct arena index → app crashed mid-tour (why only 10/26 screenshots). FIXED: names_batch resolves out-of-arena ids to empty string + regression test; CanvasViz resolveNames maps synthetic ids to group names client-side from meta.groups (better labels, no wasted IPC); audited hover_details/node_details/shell commands — all already guarded
+- CI synthetic tree rebalanced (Adobe/Chrome/WinSxS/Installer/ProgramData/Games ~4-10GB each) so by-folder families all visible in screenshots
+- Round 1 (eaa64c6) CI+UI-Screenshots+macOS ALL GREEN; round 2 (078aa05) pushed with panic fix + tabs polish
+
+Stage Summary:
+- All 3 workflows green on round 1; round 2 running
+- Panic fix is the critical production finding of this session
+- Remaining: verify round 2 screenshots (all 26 captures now expected), continue component-level polish (inspector details, snapshots, monitor cards), repeat loop

@@ -121,6 +121,17 @@ export function SnapshotsView() {
           icon={<CameraIcon size={28} />}
           title="No snapshots yet"
           body="Take a snapshot now, run your cleanup, then take another — the diff shows exactly what changed."
+          action={
+            <button
+              type="button"
+              className="db-ink-button"
+              disabled={saving || status !== "done"}
+              onClick={() => void take()}
+            >
+              <CameraIcon size={15} />
+              {saving ? "Saving…" : "Take Snapshot Now"}
+            </button>
+          }
         />
       )}
 
