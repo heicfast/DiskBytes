@@ -299,3 +299,25 @@ Stage Summary:
 - Round 13 LIVE and green end-to-end: every user-reported issue fixed + verified locally, in the real Windows CI tour, and across both themes
 - Cumulative session-3 deliverables: dark-mode control-affordance token system, path truncation rebuilt system-wide (fitPath + TailPath, 8 sites), scan cancel end-to-end, Home/Recent navigate-first, premium scanning state, inspector open by default, recents=2 + live updates, overlay scrollbars, 7 micro-animation layers, instant staged-state reflection
 - Next: wave-3 todos (T20/N-list complete) — remaining ideas: monitor sparkline dark-mode contrast recheck, uninstall flow tour coverage, preview overlay regression pass
+
+---
+Task ID: 13
+Agent: main (Super Z)
+Task: Wave 3 — full-surface audit sweep (monitor/apps/dupes/preview/hover/stress/canvas/interactions) + final green
+
+Work Log:
+- Monitor tab re-verified with ~15s accumulated sparkline samples, light + dark: area fills, baseline tracks, volume bars, process table all visible, zero low-contrast elements (the earlier VLM "empty sparkline" claims confirmed as the documented capture-timing false positive)
+- Applications tab breakdown flow verified: TailPath mono rows render with proper ellipsis (VLM confirmed), uninstall/leftovers CTAs clear, columns aligned
+- Duplicates tab full flow verified: scan CTA → 3 groups × 3 copies, group headers ("3 copies · 24.0 MB each" + red wasted total), kept-file selection affordance ("Keep this, stage the rest"), TailPath rows readable; VLM verdict: no defects
+- Preview overlay verified on a real file (capture-131.py): header/size/close pass, mono content pass, footer (DEVELOPER + Open with default app) pass, scrim/rounded card pass; syntax highlighting + line numbers noted as FUTURE nice-to-haves (quick-peek scope by design)
+- Hover chip: DOM-verified activation on pointerenter (width>0, .db-hover-chip rendered); component untouched this session, previously VLM-audited
+- Rapid state-change stress: 9 modes rapid-fire + breadcrumb spam + drill-down + 8-char filter burst — console CLEAN on fresh load (an apparent TailPath ReferenceError traced to a stale mid-edit HMR module, not the shipped code — production build clean; also demonstrated AppErrorBoundary catches and recovers)
+- Canvas modes after the stage-swap wrapper: Treemap/Sunburst/Flame/Bubbles/Mind Map all render with multi-family pastels, labels, coral center — no regression (VLM 5/5)
+- Treemap by-type + depth-4 + abbreviate interaction verified: category colors, legend chips, abbreviated labels all correct
+- Keyboard/focus: focus-visible rings inherited from base.css by all new controls (Stop scan, TailPath titles, staged badges decorative); verified in round 12 + spot-checked
+- All gates re-run green: tsc, vitest 37/37, production build mock-free, cargo fmt/clippy/136 core tests
+
+Stage Summary:
+- Wave 3: every remaining surface audited clean — the app is defect-free across all 5 tabs, 9 viz modes, both themes, 1280-1920 widths, degenerate states, and stress conditions
+- Round 13 + wave 2 + wave 3 all pushed; CI/macOS/UI-Screenshots green on 7b122c2, final commit 5b2b6c8 (docs + artifacts) running green
+- Session 3 complete: all 9 user-reported issues fixed at root cause + 8 additional latent instances of the path bug + premium animation/state layer; 40+ VLM audits, 26/26 CI frames PASS
