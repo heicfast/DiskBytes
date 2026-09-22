@@ -143,3 +143,26 @@ Stage Summary:
 - Second critical production bug of the session (after the regroup-id panic): preview text stale-closure — both found via the VLM verification loop, exactly what the loop is for
 - Dark theme is production-clean
 - Next: push round 7, verify round 6+7 CI screenshots (bubbles labels + frame-00 post-paint), then final wrap: README/docs refresh if needed
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: Session resume + Round 8 — user-reported bug sweep (duplicate title, caption icons, stats dots, sidebar scrollbar, panel widths, restart-as-admin) + professional icon system (lucide-react)
+
+Work Log:
+- Environment rebuilt (Rust 1.98.1 + rustfmt/clippy, vite dev, agent-browser); DiskDude reference zip downloaded → diskdude-ref/ (10 shots + design spec — matches our DESIGN-REFERENCE-VLM language)
+- Round 7 CI verified retroactively: 26/26 frames PASS (run 35724542574, ci-artifacts committed)
+- DUPLICATE TITLE FIXED: removed the 40px title bar row entirely; top bar (56px) is now the window drag region + hosts the Windows caption cluster at its right end (Windows 11 app convention — Files/Terminal/PowerToys pattern); macOS keeps titleBarStyle Overlay with an 84px traffic-light reserve on the top bar; "DiskBytes" now appears exactly once in chrome; +40px vertical content
+- CAPTION GLYPHS: purpose-drawn Windows 11 geometry (thin 1.7 stroke, square corners, L-clipped restore square) — CaptionMinimize/Maximize/Restore/Close; state switching fixed (maximized shows restore double-square, windowed shows single square; was backwards-looking Maximize2 diagonal arrows); close hover #C42B1C-family kept; caption bleeds flush to the top-right corner (margin -14px)
+- ICON SYSTEM: installed lucide-react@1.47 (MIT, tree-shaken) — Icon.tsx now re-exports exact professional glyphs for all standard icons (was hand-drawn approximations); purpose-drew only what lucide lacks: TreemapIcon (nested rects), SunburstIcon (concentric rings + filled hub), BubblesIcon (3 packed circles), MindMapIcon (organic curved radial branches), TopSizesIcon (descending ranked bars — reference spec's "bar chart" metaphor); isolated 48px render grid VLM-graded: all 7-10/10, caption glyphs "match Windows 11 conventions exactly"; Gauge no longer misused for Top Sizes
+- STATS DOTS FIXED (user: "dots are upwards"): root cause — parent .db-title-row uses align-items: baseline but .db-dot-sep had align-self:center → 3px dot centered on the 27px-h1 line box, far above the 12px stats baseline; fix removes the override (baseline = dot bottom edge) + translateY(-2px) optical nudge; pixel-verified: dot center within 0.5px of stat line-box center, 2.2px above baseline = typographic interpunct height; 4x zoom VLM verdict "ALIGNED"
+- SIDEBAR SCROLLBAR: .db-scroll is now overlay-style — thumb transparent at rest, fades in on container hover (8px, was always-visible 10px); matches reference (no resting scroll chrome)
+- PANEL WIDTHS REBALANCED: sidebar 340→312, inspector 382→344 (compact 292→276 / 326→304); main content +66-80px at every width (1600px: 878→944px; 1920: 1264px main); responsive audit 1280/1440/1680/1920 zero-overflow; topbar fits WITH simulated 138px Windows caption cluster at 1280 (8px slack, search flexes)
+- CRITICAL restart_as_admin BUG FIXED (user: "doesn't work"): after ShellExecuteW "runas" succeeded, the old code called tauri::process::restart() which RELAUNCHES A SECOND NON-ELEVATED COPY instead of exiting — user saw the old app again, elevation appeared broken; now app.exit(0) so only the elevated instance remains; added admin-restart-failed global listener + toast (bottom-center, 5.2s auto-dismiss) so a declined UAC is never silently swallowed (event was emitted but never listened to before)
+- Icon plumbing: AnyIcon type (ComponentType) replaces hand-rolled function-type annotations (ExploreHeader, QuickWinsSection, categoryIcon); CameraIcon re-export restored; HMR incident (stale module graph after mid-edit GaugeIcon reference) resolved by vite restart — fresh session loads clean
+- Gates: typecheck 0 errors; vitest 32/32; cargo fmt/clippy -D warnings/134 core tests PASS; production build OK (724K main chunk, unchanged — lucide tree-shaken); mock symbols 0 in dist; safety greps clean (the 1 grep hit is ACCEPTANCE.md documenting the grep itself)
+- VLM verified: topbar single-row/one-brand/caption-native; storage stats baselines aligned; Quick Wins rows well-formed; inspector 2x2 grid perfect; dark theme PASS all points
+
+Stage Summary:
+- Round 8 = every user-reported visual/UX bug fixed at root cause + professional icon system + 5th critical production bug (elevated-relaunch spawning a duplicate window)
+- Next: push round 8 → CI 26-frame verify (caption buttons render only in real Windows app — CI is the authoritative visual check), then dua-cli/cleaner feature comparison, continue VLM loop

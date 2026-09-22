@@ -61,8 +61,11 @@
   height: 3px;
   border-radius: 50%;
   background: var(--text-tertiary);
-  align-self: center;
   flex: none;
+  /* The row is baseline-aligned (h1 + 12px stats share one baseline); an
+     empty box's baseline is its bottom edge, so the dot's bottom sits on
+     the text baseline — nudge up to its optical center. */
+  transform: translateY(-2px);
 }
 .db-title-row .db-title-actions {
   display: flex;

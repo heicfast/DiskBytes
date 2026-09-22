@@ -1,13 +1,13 @@
 /**
- * DiskBytes app shell (spec §3): title bar → 56px top bar → body
- * (sidebar 340px | main | inspector 382px on Explore only), 1px
- * dividers. Hosts the 5 tabs, the inspector, the preview overlay, the
- * cleanup queue popover, and the license dialog. Also mounts the
- * DISKBYTES_TOUR driver (dev hook §15 — CI screenshot tours).
+ * DiskBytes app shell (spec §3): 56px top bar (brand, tabs, window drag
+ * region, Windows caption buttons / macOS traffic-light reserve) → body
+ * (sidebar | main | inspector on Explore only), 1px dividers. Hosts the
+ * 5 tabs, the inspector, the preview overlay, the cleanup queue popover,
+ * and the license dialog. Also mounts the DISKBYTES_TOUR driver (dev
+ * hook §15 — CI screenshot tours).
  */
 import { useCallback, useEffect, useState } from "react";
 
-import { TitleBar } from "./shell/TitleBar";
 import { TopBar } from "./shell/TopBar";
 import { Sidebar } from "./sidebar";
 import { ExploreView } from "./explore/ExploreView";
@@ -28,6 +28,8 @@ import { invoke } from "./lib/ipc";
 import { pushRecent } from "./sidebar/RecentSection";
 import { TourDriver } from "./shell/TourDriver";
 import { AppErrorBoundary } from "./shell/AppErrorBoundary";
+import { ShieldIcon } from "./components/Icon";
+import { listen } from "./lib/ipc";
 import "./theme/tokens.css";
 import "./styles/base.css";
 import "./styles/shell.css";
@@ -55,11 +57,31 @@ function AppShell() {
   const [previewId, setPreviewId] = useState<number | null>(null);
   const [queueOpen, setQueueOpen] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     attachLicenseEvents();
     void useLicenseStore.getState().load();
     useScanStore.getState().ensureListeners(); // scan-progress / scan-done / cleanup-committed (once)
+  }, []);
+
+  // Elevation decline feedback: the Rust side emits `admin-restart-failed`
+  // when the UAC prompt is declined or the elevated launch fails — surface
+  // it as a transient toast so the click is never silently swallowed.
+  useEffect(() => {
+    let un: (() => void) | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    void listen<string>("admin-restart-failed", (reason) => {
+      setToast(reason || "Elevation was declined — administrator restart failed.");
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setToast(null), 5200);
+    }).then((u) => {
+      un = u;
+    }).catch(() => undefined);
+    return () => {
+      un?.();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   // Tour-driver overlay events (CI screenshot tours).
@@ -117,7 +139,6 @@ function AppShell() {
 
   return (
     <div className="db-app">
-      <TitleBar />
       {licensePosture === "degraded" && (
         <div className="db-degrade-banner" role="alert">
           License couldn’t be validated for over 14 days — scanning works, cleanup is read-only until you reconnect (License in the top bar).
@@ -166,6 +187,12 @@ function AppShell() {
 
       <CleanupQueuePopover open={queueOpen} onClose={() => setQueueOpen(false)} anchor="topbar" />
       <LicenseDialog open={licenseOpen} onClose={() => setLicenseOpen(false)} />
+      {toast && (
+        <div className="db-toast" role="status">
+          <ShieldIcon size={15} />
+          {toast}
+        </div>
+      )}
       <TourDriver />
     </div>
   );

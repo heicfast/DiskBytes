@@ -7,8 +7,9 @@
  */
 import { useEffect, useState } from "react";
 import {
-  ArchiveIcon, AppWindowIcon, BlocksIcon, BoxIcon, CheckIcon, ChevronRightIcon,
+  ArchiveIcon, AppWindowIcon, BoxIcon, BubblesIcon, CheckIcon, ChevronRightIcon,
   ExternalLinkIcon, FileImageIcon, FileCode2Icon, PackageOpenIcon, RefreshCwIcon,
+  type AnyIcon,
 } from "../components/Icon";
 import { SectionCaption } from "../components/buttons";
 import { invoke } from "../lib/ipc";
@@ -36,7 +37,7 @@ interface QuickWinItem {
   size: number;
 }
 
-const ICONS: Record<string, (p: { size?: number }) => JSX.Element> = {
+const ICONS: Record<string, AnyIcon> = {
   archive: ArchiveIcon,
   refresh: RefreshCwIcon,
   image: FileImageIcon,
@@ -44,7 +45,7 @@ const ICONS: Record<string, (p: { size?: number }) => JSX.Element> = {
   package: PackageOpenIcon,
   code: FileCode2Icon,
   app: AppWindowIcon,
-  blocks: BlocksIcon,
+  blocks: BubblesIcon,
 };
 
 const TONES = ["violet", "rose", "green", "amber", "blue", "sky", "violet", "slate"];

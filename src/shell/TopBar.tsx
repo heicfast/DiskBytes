@@ -2,7 +2,9 @@
  * Top bar (spec §3, 56px): brand → 5 tab capsules with sliding ink pill
  * (framer-motion layoutId) → breadcrumb (back + last 4 ancestors) →
  * search capsule (Ctrl/⌘K, Esc clears) → Cleanup Queue button + badge →
- * license chip → theme toggle → inspector toggle.
+ * license chip → theme toggle → inspector toggle → Windows caption
+ * buttons. The whole bar doubles as the window drag region (Windows 11
+ * app convention — one chrome row instead of a separate title bar).
  */
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
@@ -10,13 +12,14 @@ import {
   AppWindowIcon, ChevronLeftIcon, ChevronRightIcon, Clock3Icon, CopyIcon, DatabaseIcon,
   GaugeIcon, LayoutGridIcon, MoonIcon, PanelRightIcon, SearchIcon, SunIcon, Trash2Icon, XIcon,
 } from "../components/Icon";
-import { MOD_KEY } from "../lib/platform";
+import { MOD_KEY, IS_MAC } from "../lib/platform";
 import { useCleanupStore } from "../state/cleanup";
 import { useLicenseStore } from "../state/license";
 import { useViewStore, type TabId } from "../state/view";
 import { useTheme } from "../theme/useTheme";
 import { bytes as formatBytes } from "../lib/format";
 import type { CrumbData } from "../viz/exploreIpc";
+import { CaptionButtons, useWindowControls } from "./TitleBar";
 
 const TABS: { id: TabId; label: string; Icon: typeof LayoutGridIcon }[] = [
   { id: "explore", label: "Explore", Icon: LayoutGridIcon },
@@ -47,6 +50,16 @@ export function TopBar(props: TopBarProps) {
   const { isDark, toggle } = useTheme();
   const searchRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
+  const windowApi = useWindowControls();
+
+  // Double-click on empty bar / brand toggles maximize (Windows caption
+  // convention). Interactive controls opt out via the closest() guard.
+  const onDoubleClick = (e: React.MouseEvent) => {
+    if (!windowApi) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("button, input, a, [role='toolbar'], nav")) return;
+    void windowApi.toggleMaximize();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -68,12 +81,18 @@ export function TopBar(props: TopBarProps) {
   const isExplore = tab === "explore";
 
   return (
-    <header className="db-topbar">
-      <div className="db-brand">
+    <header
+      className="db-topbar"
+      data-os={IS_MAC ? "macos" : "windows"}
+      data-tauri-drag-region
+      onDoubleClick={onDoubleClick}
+      role="banner"
+    >
+      <div className="db-brand" data-tauri-drag-region>
         <span className="db-brand-mark">
           <DatabaseIcon size={15} />
         </span>
-        <strong>DiskBytes</strong>
+        <strong data-tauri-drag-region>DiskBytes</strong>
       </div>
 
       <nav className="db-tabcaps" aria-label="Application sections">
@@ -182,6 +201,8 @@ export function TopBar(props: TopBarProps) {
       >
         <PanelRightIcon size={16} />
       </button>
+
+      <CaptionButtons />
     </header>
   );
 }

@@ -6,20 +6,20 @@
  * via CSS breakpoints (caption → depth → wrap).
  */
 import { motion } from "framer-motion";
-import { BlocksIcon, CircleDotIcon, Clock3Icon, FlameIcon, FolderIcon, GaugeIcon, Grid2x2Icon, ListTreeIcon, NetworkIcon } from "../components/Icon";
+import { BubblesIcon, Clock3Icon, FlameIcon, FolderIcon, ListTreeIcon, MindMapIcon, SunburstIcon, TopSizesIcon, TreemapIcon, type AnyIcon } from "../components/Icon";
 import {
   COLORED_MODES, DEPTH_MODES, MODES, MODE_CAPTIONS, useVizUiStore, type Mode,
 } from "../state/vizUi";
 import { EVENTS, track } from "../lib/analytics";
 
-const MODE_ICONS: Record<Mode, (p: { size?: number }) => JSX.Element> = {
+const MODE_ICONS: Record<Mode, AnyIcon> = {
   Folders: FolderIcon,
-  Treemap: Grid2x2Icon,
-  Sunburst: CircleDotIcon,
+  Treemap: TreemapIcon,
+  Sunburst: SunburstIcon,
   Flame: FlameIcon,
-  Bubbles: BlocksIcon,
-  "Mind Map": NetworkIcon,
-  "Top Sizes": GaugeIcon,
+  Bubbles: BubblesIcon,
+  "Mind Map": MindMapIcon,
+  "Top Sizes": TopSizesIcon,
   "Age Map": Clock3Icon,
   List: ListTreeIcon,
 };
@@ -79,7 +79,9 @@ export function ExploreHeader() {
 
       {DEPTH_MODES.has(mode) && (
         <label className="db-depth" aria-label={`Depth ${depth}`}>
-          <BlocksIcon size={14} />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden focusable="false">
+            <path d="M4 14v-2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2" /><path d="M12 10V6" /><circle cx="12" cy="4" r="2" /><circle cx="6" cy="16" r="2" /><circle cx="18" cy="16" r="2" />
+          </svg>
           <input
             type="range"
             min={2}

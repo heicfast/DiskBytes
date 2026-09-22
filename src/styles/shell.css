@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════
- * Shell — app grid, custom title bar (Windows caption / macOS traffic
- * lights), top bar (brand, nav capsules, breadcrumb, search, queue,
- * theme, inspector, license chip), body columns, degrade banner.
+ * Shell — app grid, top bar (window drag region: brand, nav capsules,
+ * breadcrumb, search, queue, theme, inspector, license chip, Windows
+ * caption buttons / macOS traffic-light reserve), body columns,
+ * degrade banner.
  * ═══════════════════════════════════════════════════════════════════════ */
 
 .db-app {
@@ -15,40 +16,32 @@
   overflow: hidden;
 }
 
-/* ── Title bar (Windows: caption buttons; macOS: traffic-light gap) ── */
-.db-titlebar {
-  height: var(--title-bar-h);
+/* ── Top bar — doubles as the window title bar (drag region) ────────── */
+.db-topbar {
+  height: var(--top-bar-h);
   flex: none;
   display: flex;
   align-items: center;
-  background: var(--background);
+  gap: 8px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--divider);
-}
-.db-titlebar[data-os="macos"] {
-  padding-left: 78px; /* traffic-light reserve (titleBarStyle: overlay) */
-  border-bottom: none;
   background: var(--background);
+  z-index: 5;
 }
-.db-titlebar-drag {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 4px 0 14px;
-  overflow: hidden;
+
+/* macOS: `titleBarStyle: Overlay` native traffic lights sit over the
+ * bar's left edge — reserve their width before the brand. */
+.db-topbar[data-os="macos"] {
+  padding-left: 84px;
 }
-.db-titlebar-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+
+/* ── Windows caption cluster (right end of the top bar) ─────────────── */
 .db-caption {
   flex: none;
   display: flex;
+  align-self: stretch;
+  align-items: center;
+  margin: 0 -14px 0 2px; /* bleed to the window's top-right corner */
 }
 .db-caption button {
   width: var(--caption-btn-w);
@@ -65,6 +58,9 @@
   background: var(--chip);
   color: var(--text);
 }
+.db-caption button:active {
+  opacity: 0.72;
+}
 .db-caption button.db-close:hover {
   background: var(--close-hover);
   color: #fff;
@@ -74,25 +70,13 @@
   color: #fff;
 }
 
-/* ── Top bar ────────────────────────────────────────────────────────── */
-.db-topbar {
-  height: var(--top-bar-h);
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--divider);
-  background: var(--background);
-  z-index: 5;
-}
-
 .db-brand {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 0 8px 0 2px;
   flex: none;
+  cursor: default;
 }
 .db-brand-mark {
   display: grid;

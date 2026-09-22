@@ -1,11 +1,16 @@
 /**
- * Title bar (spec §3): Windows caption buttons (46×32, close hover
- * #E81123, double-click maximize) on a drag region; on macOS the same
- * bar is a plain drag region with traffic-light reserve (the native
- * overlay controls render above it — cross-platform doc §4 Option A).
+ * Windows caption buttons (minimize / maximize-restore / close) that mount
+ * into the top bar's right end (Windows 11 app convention — Files,
+ * Terminal, PowerToys). macOS renders nothing: `titleBarStyle: Overlay`
+ * draws the native traffic lights over the top bar's left reserve.
+ *
+ * Glyphs use the exact Windows 11 caption geometry (thin 1.7 stroke,
+ * square corners, L-clipped restore square) from Icon.tsx.
  */
 import { useEffect, useState } from "react";
-import { MinusIcon, SquareIcon, XIcon, Maximize2Icon } from "../components/Icon";
+import {
+  CaptionCloseIcon, CaptionMaximizeIcon, CaptionMinimizeIcon, CaptionRestoreIcon,
+} from "../components/Icon";
 import { IS_MAC } from "../lib/platform";
 
 interface WindowApi {
@@ -42,7 +47,12 @@ function useWindowApi(): WindowApi | null {
   return api;
 }
 
-export function TitleBar() {
+/** Shared window API for drag regions (double-click maximize etc.). */
+export function useWindowControls() {
+  return useWindowApi();
+}
+
+export function CaptionButtons() {
   const api = useWindowApi();
   const [maximized, setMaximized] = useState(false);
 
@@ -69,26 +79,23 @@ export function TitleBar() {
     };
   }, [api]);
 
+  if (IS_MAC || !api) return null;
+
   return (
-    <div className="db-titlebar" data-os={IS_MAC ? "macos" : "windows"} role="banner">
-      <div className="db-titlebar-drag" data-tauri-drag-region onDoubleClick={() => void api?.toggleMaximize()}>
-        <span className="db-titlebar-title" data-tauri-drag-region>
-          DiskBytes
-        </span>
-      </div>
-      {!IS_MAC && (
-        <div className="db-caption">
-          <button aria-label="Minimize" title="Minimize" onClick={() => void api?.minimize()}>
-            <MinusIcon size={15} />
-          </button>
-          <button aria-label={maximized ? "Restore" : "Maximize"} title={maximized ? "Restore" : "Maximize"} onClick={() => void api?.toggleMaximize()}>
-            {maximized ? <SquareIcon size={13} /> : <Maximize2Icon size={13} />}
-          </button>
-          <button className="db-close" aria-label="Close" title="Close" onClick={() => void api?.close()}>
-            <XIcon size={15} />
-          </button>
-        </div>
-      )}
+    <div className="db-caption" role="group" aria-label="Window controls">
+      <button aria-label="Minimize" title="Minimize" onClick={() => void api.minimize()}>
+        <CaptionMinimizeIcon size={15} />
+      </button>
+      <button
+        aria-label={maximized ? "Restore" : "Maximize"}
+        title={maximized ? "Restore" : "Maximize"}
+        onClick={() => void api.toggleMaximize()}
+      >
+        {maximized ? <CaptionRestoreIcon size={15} /> : <CaptionMaximizeIcon size={15} />}
+      </button>
+      <button className="db-close" aria-label="Close" title="Close" onClick={() => void api.close()}>
+        <CaptionCloseIcon size={15} />
+      </button>
     </div>
   );
 }

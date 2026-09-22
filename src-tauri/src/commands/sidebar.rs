@@ -127,7 +127,7 @@ pub fn is_elevated() -> bool {
 
 /// Restart as administrator and re-run the same scan (spec §6.4/§7):
 /// ShellExecuteW "runas" with `--scan <target>`, then exit this
-/// instance.
+/// instance so only the elevated window remains.
 ///
 /// # Errors
 /// String error when elevation is declined or the launch fails.
@@ -143,7 +143,9 @@ pub fn restart_as_admin(scan_target: &str, turbo: Option<bool>, app: AppHandle) 
         run(String::new())
     };
     match result {
-        Ok(()) => tauri::process::restart(&app.env()),
+        // Exit cleanly — do NOT `tauri::process::restart`, which would
+        // relaunch a second, still-unelevated copy alongside the new one.
+        Ok(()) => app.exit(0),
         Err(reason) => {
             let _ = tauri::Emitter::emit(&app, "admin-restart-failed", reason);
         }

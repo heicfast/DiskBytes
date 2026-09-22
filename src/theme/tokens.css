@@ -95,14 +95,13 @@
   --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 
   /* ── Layout metrics (spec §3: locked) ─────────────────────────────── */
-  --title-bar-h: 40px;
   --top-bar-h: 56px;
-  --sidebar-w: 340px;
-  --inspector-w: 382px;
+  --sidebar-w: 312px;
+  --inspector-w: 344px;
   --caption-btn-w: 46px;
   --caption-btn-h: 32px;
-  --sidebar-w-compact: 292px;
-  --inspector-w-compact: 326px;
+  --sidebar-w-compact: 276px;
+  --inspector-w-compact: 304px;
 
   /* ── Density ladder breakpoints (responsive degrade) ──────────────── */
   --bp-compact: 1500px;
