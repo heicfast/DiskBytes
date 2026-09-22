@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Folder scan results with a circular treemap visualization.\n(2) QUALITY: PASS. Multi-color visualization renders correctly; UI is fully intact and aligned.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088898,
+  "id": "202609222254563bc7719e88b14982",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609222254563bc7719e88b14982",
+  "usage": {
+    "completion_tokens": 37,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1112
+  }
+}

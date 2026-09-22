@@ -184,3 +184,22 @@ Work Log:
 Stage Summary:
 - Round 9 ready: CI hotfix + cleaner adoptions + Duplicates blank-state fix + dual-CTA polish; 135 core tests, typecheck 0, vitest 32/32
 - Round 8's UI-Screenshots + macOS workflows still running on the previous push (they compile without -D warnings, so the 26-frame tour still validates round 8 visuals)
+
+---
+Task ID: 7
+Agent: main (Super Z)
+Task: Round 8+9 CI verification + Round 10 — heatmap in-cell labels (reference spec gap), remaining audits
+
+Work Log:
+- Round 8 (93be723) verified: UI-Screenshots 26/26 PASS, app-stderr clean (zero panics); 3x-zoom VLM on the real Windows caption cluster: "do look like native Windows 11 caption buttons... standard system font, spaced correctly" — the merged top bar + caption glyphs work in production; round-8 macOS run was concurrency-cancelled by the round-9 push (expected)
+- Round 9 (1285e91): CI + UI-Screenshots (26/26 PASS incl. the new Duplicates empty state at step-14) + macOS Build ALL GREEN
+- Age Map VLM false-positive investigated: claimed bucket/heatmap data mismatch; DOM ground truth extracted (bars: 12.9/9.3/11.5/41.7/18.3/6.1%; 40 nonzero month cells 2023-2026 summing exactly to the buckets; busiest Sep 2026 34.7 GB) — data is CONSISTENT; VLM misread pale mid-intensity cells as empty (3rd documented VLM false positive)
+- REAL SPEC GAP found during that audit (DiskDude spec §2.2): "a few cells in the current year show size labels directly inside the cell with a darker blue fill and border" — implemented: months ≥30% of the busiest now render bytes() inside the cell, darker fill (38% + frac×62% pastel-blue mix), 1.5px inset ink-tinted border, 9px/680 tabular label; busiest outline unchanged; VLM-verified: labels legible, centered, no overflow, premium look
+- Sidebar bottom sections VLM-audited against the reference spec: CURRENT VIEW (scan-time badge, bold name, path, Reveal + Copy Path) ✓, QUICK WINS (total right, icon/title/count/size/chevron rows, clean columns) ✓, FILE TYPES ✓ — no defects
+- Top Sizes + List modes: PRODUCTION-READY (VLM); License dialog + Cleanup Queue popover audited: PRODUCTION-READY (recycle CTA correctly disabled when empty)
+- vitest 32/32, typecheck 0 errors after all changes
+
+Stage Summary:
+- 9 of 10 rounds fully green end-to-end (round-8 clippy blip fixed in round 9); every user-reported issue now fixed, verified locally AND on real Windows CI
+- Round 10 ready to push: Age Map in-cell labels
+- Next: push round 10 → verify, then continue the long loop (remaining polish: storage-card cohesion micro-tuning if VLM flags it again, more edge-state coverage)

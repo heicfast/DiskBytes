@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "MODE: Scanning/Loading state (main visualization area is empty).\nQUALITY: PASS. UI renders correctly, no broken elements, just waiting for data.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088919,
+  "id": "20260922225517540af28f65144751",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922225517540af28f65144751",
+  "usage": {
+    "completion_tokens": 33,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1108
+  }
+}

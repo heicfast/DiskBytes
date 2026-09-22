@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Applications view in a loading/scanning state.\n(2) QUALITY: PASS. UI elements, text, and colors render correctly without misalignment.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790089434,
+  "id": "20260922230353561369f130904cc8",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922230353561369f130904cc8",
+  "usage": {
+    "completion_tokens": 36,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1111
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Folder scan results view showing \"DiskBytesTest\" directory contents.\n(2) QUALITY: PASS. UI renders correctly with clear multi-color folder visualization and aligned data.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790089397,
+  "id": "20260922230315f151151346f54395",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922230315f151151346f54395",
+  "usage": {
+    "completion_tokens": 40,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1115
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Scan results view with \"Activate DiskBytes\" license dialog overlay.\n(2) QUALITY: PASS. UI renders correctly, treemap visualization is intact, and no layout issues.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790089443,
+  "id": "20260922230402d3f25dca4d9f4f24",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922230402d3f25dca4d9f4f24",
+  "usage": {
+    "completion_tokens": 42,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1117
+  }
+}

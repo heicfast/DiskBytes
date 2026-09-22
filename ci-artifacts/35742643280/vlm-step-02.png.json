@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Sunburst chart view of a specific folder scan.\n(2) QUALITY: PASS. Multi-color visualization renders correctly with no broken or misaligned UI elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088893,
+  "id": "2026092222545126aeeccbfb394364",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092222545126aeeccbfb394364",
+  "usage": {
+    "completion_tokens": 38,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1113
+  }
+}

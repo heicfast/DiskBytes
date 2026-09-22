@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Activation dialog overlaying the \"By age\" treemap view.\n(2) QUALITY: PASS. UI renders correctly with clear text, intact treemap, and no misalignments.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088924,
+  "id": "20260922225521eabd163179804b2b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922225521eabd163179804b2b",
+  "usage": {
+    "completion_tokens": 44,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1119
+  }
+}

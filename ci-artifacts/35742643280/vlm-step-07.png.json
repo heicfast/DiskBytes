@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Folder analysis view for \"DiskBytesTest\" showing file age, types, and largest items.\n(2) QUALITY: PASS. UI renders correctly with multi-color charts and aligned text.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088904,
+  "id": "20260922225502f01883af2b5b42fa",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922225502f01883af2b5b42fa",
+  "usage": {
+    "completion_tokens": 44,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1119
+  }
+}

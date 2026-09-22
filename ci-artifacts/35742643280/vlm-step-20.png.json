@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Treemap view with \"Cleanup Queue\" modal overlay.\n(2) QUALITY: PASS. Treemap colors render correctly, UI elements are aligned, and no visual glitches are present.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088927,
+  "id": "2026092222552604fde96c224b46e4",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092222552604fde96c224b46e4",
+  "usage": {
+    "completion_tokens": 43,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1118
+  }
+}

@@ -118,13 +118,19 @@ export function AgeMapMode(props: AgeMapModeProps) {
               const v = heat.bytes[idx] ?? 0;
               const frac = heat.max > 0 ? v / heat.max : 0;
               const isBusiest = busiest && busiest[0] === y && busiest[1] === mi;
+              // Reference treatment: significant months carry their size
+              // IN the cell (darker fill + border) so the heavy months read
+              // without hovering.
+              const labeled = frac >= 0.3 && v > 0;
               return (
                 <i
                   key={mi}
-                  className={isBusiest ? "busiest" : ""}
+                  className={`${isBusiest ? "busiest" : ""} ${labeled ? "labeled" : ""}`}
                   style={{ ["--heat" as string]: Math.max(0.08, frac).toFixed(2) }}
                   title={`${MONTHS[mi]} ${y} — ${bytes(v)}`}
-                />
+                >
+                  {labeled && <b className="tnum">{bytes(v)}</b>}
+                </i>
               );
             })}
           </div>

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Treemap view of the \"DiskBytesTest\" folder.\n(2) QUALITY: PASS. Multi-color treemap visualization renders correctly with no broken or misaligned UI elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790088891,
+  "id": "20260922225449e8934e180b7b4356",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922225449e8934e180b7b4356",
+  "usage": {
+    "completion_tokens": 42,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1117
+  }
+}
