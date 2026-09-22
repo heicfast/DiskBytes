@@ -74,7 +74,7 @@ export function DuplicatesView() {
     stageMany([{ id: 0, path, size, reason: "Duplicate" }]);
   };
 
-  if (status === "idle" || status === "scanning") {
+  if (status !== "done") {
     return (
       <div className="db-tab db-scroll">
         <EmptyState
@@ -101,12 +101,14 @@ export function DuplicatesView() {
               : "Three passes: size groups, 64 KB prefix hash, full hash."}
           </span>
         </div>
-        <div className="db-tab-head-actions">
-          <button type="button" className="db-ink-button" style={{ width: "auto", padding: "0 18px" }} disabled={busy} onClick={() => void scan()}>
-            <SearchIcon size={15} />
-            {busy ? "Scanning…" : result ? "Scan Again" : "Scan for Duplicates"}
-          </button>
-        </div>
+        {(result || busy) && (
+          <div className="db-tab-head-actions">
+            <button type="button" className="db-ink-button" style={{ width: "auto", padding: "0 18px" }} disabled={busy} onClick={() => void scan()}>
+              <SearchIcon size={15} />
+              {busy ? "Scanning…" : "Scan Again"}
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -121,6 +123,20 @@ export function DuplicatesView() {
           <span className="db-spinner" />
           <span>Hashing candidates (size groups → 64 KB prefix → full)…</span>
         </div>
+      )}
+
+      {!result && !busy && status === "done" && (
+        <EmptyState
+          icon={<CopyIcon size={28} />}
+          title="Find duplicate files"
+          body="Three passes — size groups, 64 KB prefix hash, full SHA-256 — group byte-identical files so you can keep one copy and stage the rest."
+          action={
+            <button type="button" className="db-ink-button" style={{ width: "auto", padding: "0 18px" }} onClick={() => void scan()}>
+              <SearchIcon size={15} />
+              Scan for Duplicates
+            </button>
+          }
+        />
       )}
 
       {result && result.groups.length === 0 && !busy && (

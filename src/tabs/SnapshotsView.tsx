@@ -102,18 +102,20 @@ export function SnapshotsView() {
           <h1>Snapshots</h1>
           <span className="db-tab-sub">{list ? `${list.length} saved · pick Before + After to diff` : "…"}</span>
         </div>
-        <div className="db-tab-head-actions">
-          <button
-            type="button"
-            className="db-ink-button"
-            style={{ width: "auto", padding: "0 18px" }}
-            disabled={saving || status !== "done"}
-            onClick={() => void take()}
-          >
-            <CameraIcon size={15} />
-            {saving ? "Saving…" : "Take Snapshot Now"}
-          </button>
-        </div>
+        {(list ?? []).length > 0 && (
+          <div className="db-tab-head-actions">
+            <button
+              type="button"
+              className="db-ink-button"
+              style={{ width: "auto", padding: "0 18px" }}
+              disabled={saving || status !== "done"}
+              onClick={() => void take()}
+            >
+              <CameraIcon size={15} />
+              {saving ? "Saving…" : "Take Snapshot Now"}
+            </button>
+          </div>
+        )}
       </div>
 
       {(list ?? []).length === 0 && (

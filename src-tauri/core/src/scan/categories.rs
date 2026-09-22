@@ -398,7 +398,8 @@ pub const APPS_ROOT_NAMES: [&str; 4] = [
 
 /// True when `name` is a protected item at the given context (spec §4):
 /// drive-root `Windows` / `Windows.old` / `pagefile.sys` / `hiberfil.sys` /
-/// `swapfile.sys`, and `Program Files\WindowsApps` (any drive).
+/// `swapfile.sys` / `System Volume Information` / `$Recycle.Bin`, and
+/// `Program Files\WindowsApps` (any drive).
 ///
 /// `parent_is_drive_root` marks depth-1 items; `parent_is_program_files`
 /// marks items directly under a `Program Files*` folder.
@@ -422,7 +423,9 @@ pub fn is_protected_name(
             || eq_ascii(name, "Windows.old")
             || eq_ascii(name, "pagefile.sys")
             || eq_ascii(name, "hiberfil.sys")
-            || eq_ascii(name, "swapfile.sys"))
+            || eq_ascii(name, "swapfile.sys")
+            || eq_ascii(name, "System Volume Information")
+            || eq_ascii(name, "$Recycle.Bin"))
     {
         return true;
     }
@@ -541,6 +544,15 @@ mod tests {
         assert!(is_protected_name(&u16s("PAGEFILE.SYS"), true, false));
         assert!(is_protected_name(&u16s("hiberfil.sys"), true, false));
         assert!(is_protected_name(&u16s("swapfile.sys"), true, false));
+        // System volume shadow store + the bin itself: never stageable.
+        assert!(is_protected_name(
+            &u16s("System Volume Information"),
+            true,
+            false
+        ));
+        assert!(is_protected_name(&u16s("$Recycle.Bin"), true, false));
+        // Not at drive root → a user folder named like these stays usable.
+        assert!(!is_protected_name(&u16s("$Recycle.Bin"), false, false));
         assert!(!is_protected_name(&u16s("Windows"), false, false)); // not at drive root
         assert!(is_protected_name(&u16s("WindowsApps"), false, true)); // inside Program Files
         assert!(!is_protected_name(&u16s("WindowsApps"), false, false));

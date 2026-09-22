@@ -166,3 +166,21 @@ Work Log:
 Stage Summary:
 - Round 8 = every user-reported visual/UX bug fixed at root cause + professional icon system + 5th critical production bug (elevated-relaunch spawning a duplicate window)
 - Next: push round 8 → CI 26-frame verify (caption buttons render only in real Windows app — CI is the authoritative visual check), then dua-cli/cleaner feature comparison, continue VLM loop
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: Round 9 — cleaner/dua-cli adoption audit + Duplicates empty-state fix + dual-CTA dedup + CI hotfix (unused Manager import)
+
+Work Log:
+- ROUND 8 CI HOTFIX: clippy -D warnings failed on `unused import: Manager` in commands/sidebar.rs — removing tauri::process::restart(&app.env()) orphaned the Manager trait (app.env() was its only user); Linux gdk-sys can't check the app crate so CI was the first to see it; import trimmed, State/AppHandle usage verified (9/3 refs)
+- dua-cli comparison (cloned + studied): parallel scan ✓ (worker pool), TUI navigation → GUI ✓, delete → recycle-only (safer) ✓, snapshots save/diff ✓, flame graph ✓, hardlink dedup ✓ (WinSxS (vol,FileId) counted-once + dupes hardlink-identity exclusion), exclude-pattern files = TUI-specific (name filter covers the GUI need) — nothing to adopt
+- cleaner comparison (cloned + studied): our Quick Wins already exceeded its pattern set (sibling-aware target/bin/obj rules vs its blind name match); ADOPTED: build-artifact names += .terraform/.pytest_cache/.mypy_cache/.ruff_cache/.tox/.nuxt (14 total; skipped venv/.venv/.cache/coverage as too generic/risky for our review-first model); ADOPTED: protected drive-root names += "System Volume Information" + "$Recycle.Bin" (never stageable; our protected model intentionally stays at OS-critical level — toolchain caches are offered as cleanable dev_caches, safer than cleaner's because Recycle Bin + review); found+removed a maintenance trap: the patterns() table's `**` entries (node_modules/build_artifacts) were dead data — the env never resolves; real matching lives in find_named/find_build_artifacts + BUILD_ARTIFACT_NAMES; comment added pointing to the dedicated matchers
+- +2 tests: cleaner_set_artifact_names_match (all 6 new names resolve via find_build_artifacts AND surface through resolve()); protected_names extended (System Volume Information + $Recycle.Bin at drive root = protected; not at root = usable) — 135 tests green, clippy/fmt clean
+- BUG FOUND VIA VLM TAB AUDIT: Duplicates tab was BLANK between header and footer when a disk scan was done but the dupes scan hadn't run (status done + result null + !busy = no branch); fixed with a proper EmptyState (icon/title/3-pass explainer + inline "Scan for Duplicates" ink CTA); early-return now covers every non-done status (was idle||scanning, error fell through)
+- Dual-CTA dedup (VLM suggestion): Duplicates + Snapshots headers no longer render their action button when the empty state carries the same CTA (single primary action per surface); header CTA returns once results/snapshots exist (label simplified to "Scan Again")
+- Monitor tab verdict: production-ready (VLM); Snapshots empty state rated best-in-class
+
+Stage Summary:
+- Round 9 ready: CI hotfix + cleaner adoptions + Duplicates blank-state fix + dual-CTA polish; 135 core tests, typecheck 0, vitest 32/32
+- Round 8's UI-Screenshots + macOS workflows still running on the previous push (they compile without -D warnings, so the 26-frame tour still validates round 8 visuals)

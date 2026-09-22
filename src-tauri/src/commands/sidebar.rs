@@ -15,7 +15,7 @@ use diskbytes_core::scan::categories::FileCategory;
 use diskbytes_core::scan::node::Tree;
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::platform::HostPlatform;
 use crate::state::AppState;

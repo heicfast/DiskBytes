@@ -120,23 +120,12 @@ pub fn patterns() -> Vec<Pattern> {
     } // end windows pattern block
       // Shared categories (path-shape agnostic): node_modules, build
       // artifacts, large media, VM disks (any-depth / file-level).
-      // node_modules (any depth).
-    add("node_modules", "**", &["node_modules"]);
-    // Build artifacts (folder names, any depth, with sibling rules).
-    add(
-        "build_artifacts",
-        "**",
-        &[
-            "build",
-            ".build",
-            "dist",
-            ".next",
-            ".turbo",
-            ".parcel-cache",
-            "__pycache__",
-            ".gradle",
-        ],
-    );
+      // NOTE: node_modules and build_artifacts have NO pattern entries
+      // here — they are resolved by their dedicated any-depth matchers
+      // (`find_named` and `find_build_artifacts` + BUILD_ARTIFACT_NAMES)
+      // below; an entry with the `**` env would be dead data (the env
+      // never resolves), so keep this table strictly for env-rooted
+      // known-folder categories.
     p
 }
 
@@ -509,15 +498,22 @@ pub fn find_named(tree: &Tree, start: u32, name: &str, dirs_only: bool) -> Vec<u
     out
 }
 
-/// Build-artifact folder names matched unconditionally (spec §6).
-const BUILD_ARTIFACT_NAMES: [&str; 8] = [
+/// Build-artifact folder names matched unconditionally (spec §6 + the
+/// mature cleaner-set additions: Terraform/Rust/Maven/Python/Nuxt).
+const BUILD_ARTIFACT_NAMES: [&str; 14] = [
     "build",
     ".build",
     "dist",
     ".next",
+    ".nuxt",
     ".turbo",
     ".parcel-cache",
+    ".terraform",
     "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
     ".gradle",
 ];
 
@@ -685,6 +681,48 @@ mod tests {
         assert_eq!(nm.items, vec![10]);
         let ba = cats.iter().find(|c| c.id == "build_artifacts").unwrap();
         assert!(ba.items.contains(&11), "target with sibling Cargo.toml");
+    }
+
+    #[test]
+    fn cleaner_set_artifact_names_match() {
+        // The cleaner-inspired additions (.terraform/.pytest_cache/etc.)
+        // must resolve as build artifacts at any depth.
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "C:\\work");
+        t.append_batch(
+            0,
+            vec![
+                dir("infra"),
+                dir("backend"),
+                dir("web"),
+                dir("legacy"),
+                dir("scripts"),
+                dir("agent"),
+            ],
+        );
+        // infra(1) → .terraform(7), backend(2) → .pytest_cache(8),
+        // web(3) → .nuxt(9), legacy(4) → .tox(10), scripts(5) → .mypy_cache(11),
+        // agent(6) → .ruff_cache(12).
+        t.append_batch(1, vec![dir(".terraform")]);
+        t.append_batch(2, vec![dir(".pytest_cache")]);
+        t.append_batch(3, vec![dir(".nuxt")]);
+        t.append_batch(4, vec![dir(".tox")]);
+        t.append_batch(5, vec![dir(".mypy_cache")]);
+        t.append_batch(6, vec![dir(".ruff_cache")]);
+        rollup::finalize(&mut t);
+        let ba = find_build_artifacts(&t, t.root);
+        for expected in [7u32, 8, 9, 10, 11, 12] {
+            assert!(
+                ba.contains(&expected),
+                "expected artifact id {expected} in {ba:?}"
+            );
+        }
+        // And they surface through resolve() in the category row.
+        let cats = resolve(&t, &env_roots(), 1);
+        let row = cats.iter().find(|c| c.id == "build_artifacts").unwrap();
+        for expected in [7u32, 8, 9, 10, 11, 12] {
+            assert!(row.items.contains(&expected));
+        }
     }
 
     #[test]
