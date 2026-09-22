@@ -72,11 +72,7 @@ pub fn get_home_path(platform: State<'_, Arc<HostPlatform>>) -> Result<String, S
 /// the path is outside the scan — the caller decides what to do.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // State extraction is the tauri command contract
-pub fn resolve_path(
-    generation: u64,
-    path: String,
-    state: State<'_, AppState>,
-) -> Option<u32> {
+pub fn resolve_path(generation: u64, path: String, state: State<'_, AppState>) -> Option<u32> {
     let guard = state.tree.read();
     let Some(tree) = guard.as_ref() else {
         return None;

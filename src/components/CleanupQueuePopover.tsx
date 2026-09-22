@@ -11,6 +11,7 @@ import { CheckIcon, Trash2Icon, XIcon } from "./Icon";
 import { TailPath } from "./TailPath";
 import { useCleanupStore } from "../state/cleanup";
 import { useLicenseStore } from "../state/license";
+import { useScanStore } from "../state/scan";
 import { bytes } from "../lib/format";
 import { BIN_NAME, IS_MAC } from "../lib/platform";
 import { invoke } from "../lib/ipc";
@@ -34,6 +35,7 @@ export function CleanupQueuePopover({
   const clear = useCleanupStore((s) => s.clear);
   const commit = useCleanupStore((s) => s.commitToRecycleBin);
   const license = useLicenseStore((s) => s.status);
+  const scanStatus = useScanStore((s) => s.status);
   const [confirming, setConfirming] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [failure, setFailure] = useState<{ count: number; failed: CommitFailure[]; error: string | null } | null>(null);
@@ -67,6 +69,10 @@ export function CleanupQueuePopover({
   const total = items.reduce((a, i) => a + i.size, 0);
   const freeCap = license?.freeCommitCap ?? 0;
   const overFreeCap = !license?.isPro && freeCap > 0 && total > freeCap;
+  // Committing needs a settled tree; during a rescan the generation
+  // mismatches and the server would refuse. Disable with a clear
+  // reason instead of surfacing a jargon error after the click.
+  const scanRunning = scanStatus === "scanning";
 
   const doCommit = async () => {
     setCommitting(true);
@@ -116,8 +122,14 @@ export function CleanupQueuePopover({
             <button
               type="button"
               className="db-btn-commit"
-              disabled={items.length === 0 || committing || overFreeCap}
-              title={overFreeCap ? `Free tier caps cleanup at ${bytes(freeCap)} — activate DiskBytes Pro to clean more` : undefined}
+              disabled={items.length === 0 || committing || overFreeCap || scanRunning}
+              title={
+                overFreeCap
+                  ? `Free tier caps cleanup at ${bytes(freeCap)} — activate DiskBytes Pro to clean more`
+                  : scanRunning
+                    ? "Wait for the scan to finish — cleaning needs a settled map"
+                    : undefined
+              }
               onClick={() => setConfirming(true)}
             >
               <Trash2Icon size={14} />

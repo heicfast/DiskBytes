@@ -43,7 +43,10 @@ function ScanCounter({ files, totalBytes }: { files: number; totalBytes: number 
   const text = useTransform([filesMv, bytesMv], ([f, b]: number[]) =>
     `${Math.max(0, Math.round(f)).toLocaleString()} files · ${bytes(Math.max(0, b))}`,
   );
-  return <motion.span className="db-live-counter tnum" aria-live="polite">{text}</motion.span>;
+  // NOTE: no aria-live on this counter — it updates every 150 ms and
+  // would spam assistive tech; the "Scanning…" heading already carries
+  // the state, and scan completion announces through the store swap.
+  return <motion.span className="db-live-counter tnum">{text}</motion.span>;
 }
 
 export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) {

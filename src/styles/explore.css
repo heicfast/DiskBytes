@@ -294,10 +294,6 @@
   color: var(--text-secondary);
   font-weight: 600;
 }
-.db-state .db-live-counter b {
-  color: var(--ink);
-  font-weight: 700;
-}
 .db-state .db-current-path {
   max-width: 70%;
   font: 10.5px/1.6 var(--font-mono);
@@ -435,8 +431,10 @@
   min-height: 0;
   overflow-y: auto;
   padding: 0 20px 8px;
-  margin: 0 -20px;
-  padding-right: 20px;
+  /* No negative-margin bleed anymore: that pattern existed to seat the
+   * old classic-scrollbar gutter outside the padding. Overlay
+   * scrollbars (standard props) reserve no gutter, so the bleed only
+   * caused a 20px horizontal overflow (measured in the r13 audit). */
 }
 .db-view-heading {
   display: flex;
