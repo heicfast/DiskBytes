@@ -5,9 +5,8 @@
  * via the Dodo dashboard without code changes (BASE_TEST/BASE_LIVE).
  */
 import { useEffect, useState } from "react";
-import { CheckIcon, KeyIcon, SparklesIcon, XIcon } from "./Icon";
+import { CheckIcon, KeyIcon, SparklesIcon } from "./Icon";
 import { useLicenseStore } from "../state/license";
-import { bytes } from "../lib/format";
 import { bytes as fmtBytes } from "../lib/format";
 
 export function LicenseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -32,7 +31,6 @@ export function LicenseDialog({ open, onClose }: { open: boolean; onClose: () =>
 
   const posture = status?.posture ?? "unlicensed";
   const isPro = posture === "pro" || posture === "grace";
-  void bytes;
 
   return (
     <div className="db-scrim" role="dialog" aria-modal="true" aria-label="License">
@@ -109,7 +107,7 @@ export function LicenseDialog({ open, onClose }: { open: boolean; onClose: () =>
             invoke("open_url", { url: "https://diskbytes.app/pricing" }).catch(() => undefined),
           );
         }}>
-          <XIcon size={0} style={{ display: "none" }} /> Buy a key — Dodo Payments checkout
+          Buy a key — Dodo Payments checkout
         </button>
       </div>
     </div>

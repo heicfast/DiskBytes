@@ -127,3 +127,19 @@ Stage Summary:
 - Round 6 ready: bubbles label coverage/alignment/two-line, launch flash fixes, inspector padding, responsive audit
 - CI loop fully operational: 5 consecutive rounds green (baseline, r1, r2-panic-fix, r3, r4, r5); panic fix + sizes tail + two-line labels all confirmed on real Windows builds
 - Next: push round 6 → verify CI screenshots (bubbles labels + launch frame), remaining: LicenseDialog/PreviewOverlay micro-audit, dark-theme CI pass
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: Round 7 — critical preview-text stale-closure fix, LicenseDialog hygiene, dark-theme systematic audit
+
+Work Log:
+- CRITICAL BUG FOUND + FIXED (via live VLM audit of PreviewOverlay): text previews for Developer/Other category files (most code files!) never rendered — `if (kind === "other") setKind("text")` read the STALE closure state (still "loading") so the switch never fired; overlay stuck on the placeholder icon. Rewrote the kind resolution: text-able cats resolve preview_text first and setKind once (pdf short-circuits, failure falls back to the placeholder). Live-verified: capture-131.py now renders its content in the overlay
+- LicenseDialog hygiene: removed duplicate `bytes`+`fmtBytes` import pair with the `void bytes;` suppression hack; removed hidden dead XIcon in the buy-key link
+- Dark theme systematic audit (CI tour is light-only): captured 11 dark frames (treemap/sunburst/flame/bubbles/mind-map/folders + duplicates/applications/monitor/snapshots/explore) — VLM verdict: ALL PASS (consistent #1E1E20/#2C2C2E surfaces, pastel cells pop, labels legible, sparkline fills visible, no white-flash/contrast defects)
+- vitest 32/32, typecheck clean after all changes
+
+Stage Summary:
+- Second critical production bug of the session (after the regroup-id panic): preview text stale-closure — both found via the VLM verification loop, exactly what the loop is for
+- Dark theme is production-clean
+- Next: push round 7, verify round 6+7 CI screenshots (bubbles labels + frame-00 post-paint), then final wrap: README/docs refresh if needed

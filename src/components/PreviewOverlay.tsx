@@ -39,26 +39,28 @@ export function PreviewOverlay({
         return;
       }
       const cat = d.kind.toLowerCase();
-      if (cat === "images") setKind("image");
+      if (["documents", "other", "developer"].includes(cat)) {
+        // Text-able kinds: resolve preview_text first and switch to the
+        // text view on success (a stale-closure on the `kind` state once
+        // left these stuck on the placeholder icon — kind was still
+        // "loading" in this closure when the fetch settled).
+        const isPdf = cat === "documents" && d.name.toLowerCase().endsWith(".pdf");
+        if (isPdf) {
+          setKind("pdf");
+        } else {
+          const t = await previewText(generation, id).catch(() => null);
+          if (disposed) return;
+          if (t) {
+            setText(t);
+            setKind("text");
+          } else {
+            setKind("other");
+          }
+        }
+      } else if (cat === "images") setKind("image");
       else if (cat === "video") setKind("video");
       else if (cat === "audio") setKind("audio");
-      else if (cat === "documents") {
-        const name = d.name.toLowerCase();
-        if (name.endsWith(".pdf")) setKind("pdf");
-        else setKind("text");
-      } else if (["other", "folder"].includes(cat)) {
-        // text-able? try preview_text for plain-ish kinds
-        setKind("other");
-      } else {
-        setKind("other");
-      }
-      if (cat === "documents" || cat === "other" || cat === "developer") {
-        const t = await previewText(generation, id).catch(() => null);
-        if (t && !disposed) {
-          setText(t);
-          if (kind === "other") setKind("text");
-        }
-      }
+      else setKind("other");
     })();
     return () => {
       disposed = true;
