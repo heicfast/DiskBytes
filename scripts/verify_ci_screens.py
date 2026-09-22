@@ -19,9 +19,13 @@ def api(url):
         return json.load(r)
 
 def dl(url, dest):
-    req = urllib.request.Request(url, headers={"Authorization": f"token {TOKEN}"})
-    with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
-        f.write(r.read())
+    # NB: artifact URLs redirect to Azure blob storage, which rejects a
+    # forwarded GitHub Authorization header — use curl -L (it strips auth on
+    # cross-host redirects) instead of urllib.
+    subprocess.run(
+        ["curl", "-sL", "-H", f"Authorization: token {TOKEN}", "-o", dest, url],
+        check=True, timeout=600,
+    )
 
 def vlm(prompt, images, out):
     cmd = ["z-ai", "vision", "-p", prompt, "-o", out]

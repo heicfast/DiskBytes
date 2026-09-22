@@ -1,10 +1,11 @@
 /**
  * Layout IPC decode tests (spec §7 / doc 03 M4.1): the framed
- * `[u32 meta_len LE][meta JSON][32 B cells]` contract must decode from
- * EVERY transport shape — the custom-protocol path hands us an
- * ArrayBuffer, the postMessage fallback can deliver number arrays or
+ * `[u32 meta_len LE][meta JSON][32 B cells][8 B sizes per cell]` contract
+ * must decode from EVERY transport shape — the custom-protocol path hands
+ * us an ArrayBuffer, the postMessage fallback can deliver number arrays or
  * typed arrays. A DataView on the wrong shape throws and the canvas
- * silently blanks (the CI blank-treemap bug).
+ * silently blanks (the CI blank-treemap bug). The sizes tail is optional
+ * (legacy frames decode with size 0).
  */
 import { describe, expect, it } from "vitest";
 import { decodeLayout } from "./layoutIpc";
@@ -17,9 +18,14 @@ interface TCell {
   g: [number, number, number, number, number];
 }
 
-function frame(meta: Record<string, unknown>, cells: TCell[]): ArrayBuffer {
+function frame(
+  meta: Record<string, unknown>,
+  cells: TCell[],
+  sizes?: number[],
+): ArrayBuffer {
   const metaJson = new TextEncoder().encode(JSON.stringify(meta));
-  const out = new ArrayBuffer(4 + metaJson.length + cells.length * 32);
+  const tail = sizes ? cells.length * 8 : 0;
+  const out = new ArrayBuffer(4 + metaJson.length + cells.length * 32 + tail);
   const view = new DataView(out);
   view.setUint32(0, metaJson.length, true);
   new Uint8Array(out, 4).set(metaJson);
@@ -36,6 +42,14 @@ function frame(meta: Record<string, unknown>, cells: TCell[]): ArrayBuffer {
     view.setFloat32(o + 24, g[3], true);
     view.setFloat32(o + 28, g[4], true);
     o += 32;
+  }
+  if (sizes) {
+    for (const s of sizes) {
+      // u64 LE via two u32 halves (DataView has no setUint64).
+      view.setUint32(o, s % 4294967296, true);
+      view.setUint32(o + 4, Math.floor(s / 4294967296), true);
+      o += 8;
+    }
   }
   return out;
 }
@@ -125,5 +139,35 @@ describe("decodeLayout transport shapes", () => {
     expect(c.g[2]).toBeCloseTo(3e-7, 5);
     expect(c.g[3]).toBeCloseTo(65504);
     expect(c.g[4]).toBeCloseTo(0.5);
+    // No sizes tail → size decodes as 0 (legacy frames stay readable).
+    expect(c.size).toBe(0);
+  });
+
+  it("decodes the u64 sizes tail in cell order", () => {
+    const cells: TCell[] = [
+      { id: 1, depth: 1, flags: 0, rgba: 0, g: [0, 0, 10, 10, 0] },
+      { id: 2, depth: 1, flags: 0, rgba: 0, g: [10, 0, 10, 10, 0] },
+      { id: 0xffff_0000, depth: 0, flags: 0, rgba: 0, g: [0, 10, 20, 4, 0] },
+    ];
+    const meta = { ...META, cellCount: 3 };
+    // 4.5 TB exercises the high u32 half (> 2^32).
+    const sizes = [4096, 12_884_901_888_832, 7];
+    const res = decodeLayout(frame(meta, cells, sizes));
+    expect(res.cells).toHaveLength(3);
+    expect(res.cells[0].size).toBe(4096);
+    expect(res.cells[1].size).toBe(12_884_901_888_832);
+    expect(res.cells[2].size).toBe(7);
+  });
+
+  it("does not confuse the cell count when a sizes tail is present", () => {
+    // Legacy length-derived counting would read (32N + 8N)/32 > N cells;
+    // meta.cellCount must win.
+    const cells: TCell[] = [
+      { id: 1, depth: 1, flags: 0, rgba: 0, g: [0, 0, 10, 10, 0] },
+      { id: 2, depth: 1, flags: 0, rgba: 0, g: [10, 0, 10, 10, 0] },
+    ];
+    const res = decodeLayout(frame({ ...META, cellCount: 2 }, cells, [1, 2]));
+    expect(res.cells).toHaveLength(2);
+    expect(res.cells[1].size).toBe(2);
   });
 });

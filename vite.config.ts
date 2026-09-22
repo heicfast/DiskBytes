@@ -18,6 +18,11 @@ export default defineConfig({
     },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
+  // Single-entry app: constrain the dep-scanner to the real entry so stray
+  // HTML files inside the workspace (tooling/templates) are never crawled.
+  optimizeDeps: {
+    entries: ["index.html"],
+  },
   build: {
     // Tauri uses Chromium on Windows WebView2; 2021+ support is fine
     target: "chrome105",

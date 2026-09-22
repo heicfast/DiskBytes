@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing analysis of the \"DiskBytesTest\" folder.\n(2) QUALITY: PASS. UI renders correctly with multi-color charts, no broken elements, and proper alignment.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790075989,
+  "id": "2026092219194764a241cdd6d447f7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092219194764a241cdd6d447f7",
+  "usage": {
+    "completion_tokens": 43,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1118
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing a folder scan with the \"By folder\" visualization.\n(2) QUALITY: PASS. UI elements and multi-color bubble chart are rendering correctly.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790075985,
+  "id": "20260922191943b21f14340bf5465c",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922191943b21f14340bf5465c",
+  "usage": {
+    "completion_tokens": 39,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1114
+  }
+}

@@ -120,7 +120,7 @@ pub fn get_layout(
     }
 
     let buffer = compute_layout(tree, &req, &regroup_cache)?;
-    let framed = frame(&buffer);
+    let framed = frame(&buffer, tree);
     cache.lock().insert(req, Arc::new(framed.clone()));
     Ok(Response::new(framed))
 }
@@ -267,13 +267,14 @@ fn regrouped_for(tree: &Tree, req: &LayoutRequest, cache: &RegroupCache) -> Arc<
 }
 
 /// Frame the response: `[u32 meta_len LE][meta JSON][cells binary]`.
-fn frame(buffer: &LayoutBuffer) -> Vec<u8> {
+fn frame(buffer: &LayoutBuffer, tree: &Tree) -> Vec<u8> {
     let mut meta = buffer.meta.clone();
     // Cell count is bounded by MAX_CELLS (20 000) at the engine level.
     meta.cell_count = u32::try_from(buffer.cells.len()).unwrap_or(u32::MAX);
     let meta_json = serde_json::to_vec(&meta).unwrap_or_else(|_| b"{}".to_vec());
     let cells = buffer.cells_to_bytes();
-    let mut out = Vec::with_capacity(4 + meta_json.len() + cells.len());
+    let sizes = buffer.sizes_to_bytes(tree);
+    let mut out = Vec::with_capacity(4 + meta_json.len() + cells.len() + sizes.len());
     // Meta JSON is small (a few KB — far below u32).
     out.extend_from_slice(
         &u32::try_from(meta_json.len())
@@ -282,6 +283,10 @@ fn frame(buffer: &LayoutBuffer) -> Vec<u8> {
     );
     out.extend_from_slice(&meta_json);
     out.extend_from_slice(&cells);
+    // Sizes tail: one LE u64 per cell (same order) — decoded by the JS
+    // twin for the two-line "name / size" cell labels. The decoder trusts
+    // `meta.cellCount`, so the tail length never confuses the cell count.
+    out.extend_from_slice(&sizes);
     out
 }
 

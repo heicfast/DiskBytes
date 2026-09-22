@@ -31,7 +31,8 @@ export interface LayoutMeta {
   totalBytes: number;
 }
 
-/** One decoded cell (32 bytes on the wire; id/depth/flags/rgba/5×f32). */
+/** One decoded cell (40 bytes on the wire: 32-byte record + 8-byte size
+ * tail entry; id/depth/flags/rgba/5×f32 + u64 size). */
 export interface Cell {
   id: number;
   depth: number;
@@ -40,6 +41,10 @@ export interface Cell {
   /** Geometry — meaning depends on the mode (rect: x,y,w,h + header
    * flag; circle/arc/dot variants). */
   g: [number, number, number, number, number];
+  /** On-disk size (bytes) — from the frame's u64 sizes tail (0 when the
+   * producer did not emit one). Powers the two-line "name / size" cell
+   * labels without an extra IPC round trip. */
+  size: number;
 }
 
 export interface LayoutResult {
@@ -74,7 +79,9 @@ function asBytes(buffer: ArrayBuffer | Uint8Array | number[]): Uint8Array {
   return out;
 }
 
-/** Decode the framed binary body. */
+/** Decode the framed binary body: `[u32 meta_len LE][meta JSON]
+ * [cellCount × 32 B cells][cellCount × 8 B sizes]` (the sizes tail is
+ * optional — decoders treat it as 0 when absent). */
 export function decodeLayout(buffer: ArrayBuffer | Uint8Array | number[]): LayoutResult {
   const bytes = asBytes(buffer);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -82,7 +89,14 @@ export function decodeLayout(buffer: ArrayBuffer | Uint8Array | number[]): Layou
   const metaJson = new TextDecoder().decode(bytes.subarray(4, 4 + metaLen));
   const meta = JSON.parse(metaJson) as LayoutMeta;
   const cellsStart = 4 + metaLen;
-  const cellCount = Math.floor((bytes.byteLength - cellsStart) / 32);
+  // The producer sets cellCount in meta; fall back to the legacy
+  // length-derived count only when it is missing (tail-less frames only).
+  const cellCount =
+    meta.cellCount > 0
+      ? meta.cellCount
+      : Math.floor((bytes.byteLength - cellsStart) / 32);
+  const sizesStart = cellsStart + cellCount * 32;
+  const hasSizes = bytes.byteLength >= sizesStart + cellCount * 8;
   const cells: Cell[] = new Array(cellCount);
   for (let i = 0; i < cellCount; i++) {
     const o = cellsStart + i * 32;
@@ -98,6 +112,8 @@ export function decodeLayout(buffer: ArrayBuffer | Uint8Array | number[]): Layou
         view.getFloat32(o + 24, true),
         view.getFloat32(o + 28, true),
       ],
+      // u64 LE → Number (safe: real sizes are far below 2^53).
+      size: hasSizes ? Number(view.getBigUint64(sizesStart + i * 8, true)) : 0,
     };
   }
   return { meta, cells };

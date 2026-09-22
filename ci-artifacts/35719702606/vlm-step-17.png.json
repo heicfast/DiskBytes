@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Activation/Registration dialog overlaying the main Explore view.\n(2) QUALITY: PASS. UI renders correctly with clear text, proper alignment, and visible background visualization.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790076009,
+  "id": "202609221920084053f601d54c406c",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609221920084053f601d54c406c",
+  "usage": {
+    "completion_tokens": 40,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1115
+  }
+}

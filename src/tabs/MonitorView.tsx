@@ -37,19 +37,26 @@ interface Sample {
 const RING = 120;
 
 function Sparkline({ values, color, height = 44 }: { values: number[]; color: string; height?: number }) {
-  const path = useMemo(() => {
-    if (values.length < 2) return "";
+  const { line, area } = useMemo(() => {
+    if (values.length < 2) return { line: "", area: "" };
     const max = Math.max(...values, 1);
     const w = 100;
     const step = w / (RING - 1);
     const start = RING - values.length;
-    return values
-      .map((v, i) => `${i === 0 ? "M" : "L"}${((start + i) * step).toFixed(1)},${(height - (v / max) * (height - 4) - 2).toFixed(1)}`)
-      .join(" ");
+    const pts = values.map(
+      (v, i) =>
+        `${((start + i) * step).toFixed(1)},${(height - (v / max) * (height - 4) - 2).toFixed(1)}`,
+    );
+    const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p}`).join(" ");
+    const base = height - 2;
+    const area = `M${pts[0]} L${pts[pts.length - 1]} L${(start + values.length - 1) * step},${base} L${start * step},${base} Z`;
+    return { line, area };
   }, [values, height]);
   return (
     <svg className="db-mon-spark" viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" aria-hidden>
-      <path d={path} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+      <line className="spark-base" x1="0" y1={height - 2} x2="100" y2={height - 2} vectorEffect="non-scaling-stroke" />
+      {area && <path className="spark-area" d={area} fill={color} />}
+      <path d={line} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

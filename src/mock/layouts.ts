@@ -450,14 +450,30 @@ export function buildLayout(
 }
 
 /** Encode cells into the framed binary layout buffer. */
-export function encodeLayout(meta: Record<string, unknown>, cells: MockCell[]): ArrayBuffer {
+export function encodeLayout(
+  meta: Record<string, unknown>,
+  cells: MockCell[],
+  tree: MockTree,
+): ArrayBuffer {
   const metaJson = JSON.stringify(meta);
   const metaBytes = new TextEncoder().encode(metaJson);
-  const buf = new ArrayBuffer(4 + metaBytes.length + cells.length * 32);
+  // Frame: [u32 meta_len LE][meta JSON][32 B cells][8 B sizes per cell]
+  // — the sizes tail mirrors the Rust core's `sizes_to_bytes` (real node
+  // ids from the tree, synthetic group ids from meta.groups) so the JS
+  // decoder's two-line "name / size" labels work identically in dev.
+  const buf = new ArrayBuffer(4 + metaBytes.length + cells.length * 40);
   const view = new DataView(buf);
   view.setUint32(0, metaBytes.length, true);
   new Uint8Array(buf, 4, metaBytes.length).set(metaBytes);
   let o = 4 + metaBytes.length;
+  const groupSizes = new Map<number, number>(
+    ((meta.groups as { id: number; size: number }[] | undefined) ?? []).map((g) => [g.id, g.size]),
+  );
+  const sizeOf = (id: number): number => {
+    if ((id >>> 0) >= 0xffff0000) return groupSizes.get(id) ?? 0;
+    const n = tree.nodes[id];
+    return n ? n.onDisk || n.logical || 0 : (groupSizes.get(id) ?? 0);
+  };
   for (const c of cells) {
     view.setUint32(o, c.id >>> 0, true);
     view.setUint16(o + 4, c.depth, true);
@@ -469,6 +485,13 @@ export function encodeLayout(meta: Record<string, unknown>, cells: MockCell[]): 
     view.setFloat32(o + 24, c.g[3], true);
     view.setFloat32(o + 28, c.g[4], true);
     o += 32;
+  }
+  for (const c of cells) {
+    // u64 LE via two u32 halves (DataView has no setUint64).
+    const s = sizeOf(c.id);
+    view.setUint32(o, s % 4294967296, true);
+    view.setUint32(o + 4, Math.floor(s / 4294967296), true);
+    o += 8;
   }
   return buf;
 }

@@ -464,9 +464,12 @@ function drawCells(
             y + 4,
             ON_PASTEL,
           );
-          if ((c.flags & DIR_BIT) !== 0 && rw >= 60 && rh >= 30) {
-            ctx.fillStyle = ON_PASTEL_2;
-            ctx.font = "500 9px " + uiFont();
+          // Second line — the reference's two-line "name / size" labels
+          // on big cells (size arrives via the frame's u64 sizes tail;
+          // "600 9px" was dead styling before the tail existed).
+          if (big && rh >= 64 && c.size > 0) {
+            ctx.font = `600 ${Math.max(9.5, fontPx - 2.5)}px ${uiFont()}`;
+            haloText(ctx, bytes(c.size), x + 5, y + 6 + fontPx, ON_PASTEL_2);
           }
         }
       }

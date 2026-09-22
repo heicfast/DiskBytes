@@ -85,3 +85,24 @@ Stage Summary:
 - All 3 workflows green on round 1; round 2 running
 - Panic fix is the critical production finding of this session
 - Remaining: verify round 2 screenshots (all 26 captures now expected), continue component-level polish (inspector details, snapshots, monitor cards), repeat loop
+
+---
+Task ID: 2
+Agent: main (Super Z)
+Task: Session resume + round 3 push + round 4 (Monitor polish + wire-format sizes tail for two-line cell labels)
+
+Work Log:
+- Environment had been reset (Refrences-Screenshots/ + shots/ lost; Rust toolchain + gh CLI gone; 172 mode-only git diffs). Restored: git config core.fileMode false (clean tree), rustup reinstall, gh→REST API via curl, vite dev via (setsid &) — note: vite listens on [::1]:1420 (IPv6), use http://localhost:1420 in agent-browser
+- Design context restored from committed docs/DESIGN-REFERENCE-VLM.md (857 lines) — the source-of-truth design language
+- Fixed vite dev crash: dep-scanner crawled skills/ template HTML importing "three" → optimizeDeps.entries: ["index.html"] (semantically correct for this single-entry Tauri app)
+- Round 3 (bf6b63c) pushed: empty-state design system, snapshots CTA, CI tree rebalanced ~15GB, verify_ci_screens.py; ALL 3 WORKFLOWS GREEN incl. UI-Screenshots (26/26 frames captured, app-stderr 0 bytes — panic fix confirmed in production CI)
+- verify_ci_screens.py: artifact downloads now use curl -L (urllib forwarded the GitHub Authorization header to the Azure blob redirect → 403); full 26-frame VLM audit: 26/26 PASS → ci-artifacts/35719702606/REPORT.md
+- Monitor tab polish (VLM-driven): card gap 14→16px, padding air, header margin 10→12px; sparklines upgraded with area fill (opacity .14) + baseline track (early samples read as intentional live data, not artifacts); process table rows 6.5→9px padding, font 11.5→12px, name weight 640 + ink color, headers 650→700 + secondary color, toolbar margins; memory legend wraps at 10px; volume bars use the --used red gradient (semantic match with ring gauge)
+- CRITICAL GAP FOUND (VLM deep pass + code audit): treemap two-line labels were impossible — CanvasViz's second-line "600 9px" styling was DEAD CODE (fillStyle+font set, never fillText) because the 32-byte cell wire format carries no size. Fix: extended the frame with a u64 sizes tail — core LayoutBuffer::sizes_to_bytes (real ids → tree on_disk; synthetic ids → meta.groups; unknown → 0, never panics), app frame() appends it, JS decodeLayout reads it (trusts meta.cellCount; legacy tail-less frames decode size 0), mock encodeLayout parity (u64 via two u32 halves), CanvasViz draws "name / size" on big rects (≥150×64)
+- Gates: cargo fmt/clippy -D warnings/134 tests PASS; typecheck PASS; vitest 32/32 (2 new: sizes tail decode, cellCount-not-confused); safety greps CLEAN; production build OK; mock symbols absent from dist bundle (installMock/monitorTicker/buildLayout/encodeLayout all 0)
+- VLM-verified in browser: two-line "Local Disk (C:) / 129 GB" labels confirmed on canvas
+
+Stage Summary:
+- Round 4 ready to push: Monitor polish + sizes-tail wire extension + two-line treemap labels + vite optimizeDeps fix + verify script curl fix
+- Round 3 CI fully green with clean app logs — the CI loop (push → build → screenshots → VLM) is fully operational again
+- Next: push round 4, verify CI + UI screenshots (expect two-line labels visible in real Windows app), continue component polish (inspector details, snapshots list rows)

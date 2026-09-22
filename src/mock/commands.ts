@@ -539,7 +539,7 @@ const commands: Record<string, Cmd> = {
       Number(req.depth),
       String(req.color),
     );
-    return encodeLayout(result.meta, result.cells);
+    return encodeLayout(result.meta, result.cells, tree);
   },
   preview_text: () => ({ text: "The quick brown fox jumps over the lazy dog.\n".repeat(40), truncated: false, read: 1120 }),
 

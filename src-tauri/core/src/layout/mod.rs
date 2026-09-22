@@ -177,6 +177,33 @@ impl LayoutBuffer {
         }
         out
     }
+
+    /// Serialize the per-cell on-disk sizes — one little-endian `u64` per
+    /// cell, in the same order as [`LayoutBuffer::cells_to_bytes`]. The
+    /// app's frame appends this tail after the cells block and the JS twin
+    /// (`decodeLayout`) reads it for the two-line "name / size" cell labels
+    /// (no extra IPC round trip for label sizes).
+    ///
+    /// Real node ids resolve through the tree's `on_disk`; synthetic group
+    /// ids (`SYNTH_BASE + n`, emitted by the regroup engines and the group
+    /// header strips) resolve through `meta.groups`.
+    #[must_use]
+    pub fn sizes_to_bytes(&self, tree: &Tree) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.cells.len() * 8);
+        for c in &self.cells {
+            let size = if c.id >= regroup::SYNTH_BASE {
+                self.meta
+                    .groups
+                    .iter()
+                    .find(|g| g.id == c.id)
+                    .map_or(0, |g| g.size)
+            } else {
+                tree.node(c.id).map_or(0, |n| n.on_disk)
+            };
+            out.extend_from_slice(&size.to_le_bytes());
+        }
+        out
+    }
 }
 
 /// Layout metadata returned as JSON alongside the binary cells.
@@ -487,5 +514,59 @@ mod tests {
         assert_eq!(age_bucket_color(0), 0x34D399);
         assert_eq!(age_bucket_color(5), 0xF87171);
         assert_eq!(age_bucket_color(99), 0xF87171); // clamped
+    }
+
+    #[test]
+    fn sizes_tail_resolves_real_and_synthetic_ids() {
+        // Wire contract for the two-line cell labels: one LE u64 per cell
+        // in cell order — real ids from the tree's on_disk, synthetic
+        // group ids (headers/regroup cells) from meta.groups, unknowns 0.
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "C:\\T");
+        let file = |name: &str, on_disk: u64| crate::scan::node::BatchEntry {
+            name: name.encode_utf16().collect(),
+            node: {
+                let mut n = crate::scan::node::Node::new_file();
+                n.logical = on_disk;
+                n.on_disk = on_disk;
+                n
+            },
+        };
+        t.append_batch(0, vec![file("z1.bin", 100), file("z2.bin", 50)]);
+        // ids: root 0, z1 1, z2 2.
+
+        let synth = regroup::SYNTH_BASE + 1;
+        let buf = LayoutBuffer {
+            cells: vec![
+                Cell::rect(1, 1, 0xFF, 0.0, 0.0, 10.0, 10.0), // real file → 100
+                Cell::header(synth, 0, 0xFF, 0.0, 0.0, 10.0, 4.0), // group → 777
+                Cell::rect(9, 1, 0xFF, 0.0, 0.0, 10.0, 10.0), // unknown → 0
+            ],
+            meta: LayoutMeta {
+                mode: "treemap-groups".into(),
+                generation: 1,
+                node: 0,
+                width: 100.0,
+                height: 100.0,
+                depth: 5,
+                color_mode: ColorMode::ByType,
+                cell_count: 3,
+                truncated: false,
+                center: None,
+                groups: vec![GroupDesc {
+                    id: synth,
+                    name: "Video".into(),
+                    color: 0x93C5FD,
+                    size: 777,
+                }],
+                total_bytes: 150,
+            },
+        };
+        let sizes = buf.sizes_to_bytes(&t);
+        assert_eq!(sizes.len(), 24, "one u64 per cell");
+        let read = |i: usize| u64::from_le_bytes(sizes[i * 8..(i + 1) * 8].try_into().unwrap());
+        assert_eq!(read(0), 100, "real node id resolves to on_disk");
+        assert_eq!(read(1), 777, "synthetic group id resolves via meta.groups");
+        assert_eq!(read(2), 0, "unknown id resolves to 0 (never panics)");
     }
 }
