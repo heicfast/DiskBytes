@@ -140,11 +140,11 @@ jobs:
           # bring to front
           $ws = New-Object -ComObject WScript.Shell
           $null = $ws.AppActivate($app.Id)
-          # 3 s = WebView2 first paint; the scan completes ~2-3 s later and
-          # the tour starts immediately — frame 00 (at ~5.6 s) lands on the
-          # Folders mode (tour step 0). 6 s still missed it (scan faster
-          # than estimated: 139 files in ~1 s).
-          Start-Sleep -Seconds 3
+          # 5.5 s = WebView2 first paint + scan start. With the ~15 GB
+          # synthetic tree the scan runs ~3-4 s, so frame 00 (at ~8.1 s)
+          # lands on the Folders mode (tour step 0) instead of the
+          # pre-paint blank window (round-4 step-00 FAIL).
+          Start-Sleep -Milliseconds 5500
           $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           $step = 0
           $max = 26   # ~17 tour steps + margin

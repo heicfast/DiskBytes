@@ -101,7 +101,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
   background: var(--card);
-  padding: 12px 13px;
+  padding: 12px 14px;
   margin-top: 12px;
 }
 .db-inspector-card > header {

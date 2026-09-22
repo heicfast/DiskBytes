@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing folder scan results with a tooltip active.\n(2) QUALITY: PASS. UI renders correctly, all data visible, and layout is stable.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790077385,
+  "id": "2026092219430456ff473a503843a3",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092219430456ff473a503843a3",
+  "usage": {
+    "completion_tokens": 38,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1113
+  }
+}

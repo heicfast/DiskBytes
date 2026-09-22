@@ -313,7 +313,9 @@ function labelable(c: Cell, mode: string): boolean {
     return c.g[2] >= 36 && c.g[3] >= 15;
   }
   if (mode === "bubbles" || mode === "mind-map") {
-    return c.g[2] >= 26;
+    // Prefetch wider than the render gate (bubbles render labels from
+    // r≥19; mind-map dots from r≥20) so the repaint always has names.
+    return c.g[2] >= 16;
   }
   return false; // sunburst labels drawn from arc math
 }
@@ -516,14 +518,30 @@ function drawCells(
       // The sunburst center disc carries the dedicated white center
       // label below — skip the generic dark-ink circle label for it.
       const isSunburstCenter = mode === "sunburst" && c.id === layout.meta.node;
-      if (r >= 30 && !isSunburstCenter) {
+      // Bubble labels: label every circle that can FIT one (a 10 px line
+      // needs ~19 px of radius). The old r≥30 gate left mid-size bubbles
+      // anonymous at common canvas sizes (770-840 px wide viz area).
+      const minLabelR = mode === "sunburst" ? 30 : 19;
+      if (r >= minLabelR && !isSunburstCenter) {
         const name = names.get(c.id);
         if (name) {
           const label = props.abbreviateLabels ? abbreviate(name) : name;
-          ctx.fillStyle = ON_PASTEL;
-          ctx.font = "600 10px " + getComputedStyle(document.documentElement).getPropertyValue("--font-ui");
+          const big = r >= 64;
+          ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText(clipLabel(ctx, label, r * 1.6), x, y);
+          ctx.fillStyle = ON_PASTEL;
+          ctx.font = `${big ? 700 : 600} ${big ? 11.5 : 10}px ${uiFont()}`;
+          // Big bubbles get the reference's stacked treatment: name over
+          // size (the u64 sizes tail) — small ones keep the single line.
+          if (big && c.size > 0) {
+            ctx.fillText(clipLabel(ctx, label, r * 1.7), x, y - 7);
+            ctx.fillStyle = ON_PASTEL_2;
+            ctx.font = `600 10px ${uiFont()}`;
+            ctx.fillText(bytes(c.size), x, y + 8);
+          } else {
+            ctx.fillText(clipLabel(ctx, label, r * 1.6), x, y);
+          }
+          ctx.textAlign = "left";
         }
       }
     } else if (kind === CELL_KIND.DOT) {

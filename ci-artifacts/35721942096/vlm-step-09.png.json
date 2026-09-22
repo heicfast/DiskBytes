@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing folder contents with a tooltip active on the \"Windows\" item.\n(2) QUALITY: PASS. UI renders correctly with clear multi-color visualization and no broken elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790077381,
+  "id": "2026092219430068278293741249c1",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092219430068278293741249c1",
+  "usage": {
+    "completion_tokens": 43,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 63
+    },
+    "total_tokens": 1118
+  }
+}

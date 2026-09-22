@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing a \"By folder\" bubble chart visualization of the \"DiskBytesTest\" directory.\n(2) QUALITY: PASS. UI renders correctly with multi-color bubbles, aligned text, and no broken elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790077380,
+  "id": "2026092219425886b2d5edb8ec4506",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092219425886b2d5edb8ec4506",
+  "usage": {
+    "completion_tokens": 50,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1125
+  }
+}

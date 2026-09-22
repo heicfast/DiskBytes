@@ -106,3 +106,24 @@ Stage Summary:
 - Round 4 ready to push: Monitor polish + sizes-tail wire extension + two-line treemap labels + vite optimizeDeps fix + verify script curl fix
 - Round 3 CI fully green with clean app logs — the CI loop (push → build → screenshots → VLM) is fully operational again
 - Next: push round 4, verify CI + UI screenshots (expect two-line labels visible in real Windows app), continue component polish (inspector details, snapshots list rows)
+
+---
+Task ID: 3
+Agent: main (Super Z)
+Task: Round 5+6 — Snapshots diff bars, Monitor polish verification, bubbles label coverage fix, launch flash fixes, responsive re-audit
+
+Work Log:
+- Round 5 (97d6bc5) pushed: snapshots diff magnitude bars (|Δ| vs largest change, used-red/free-green, 4-col grid), size-leads metadata hierarchy, toggle inset shadow, dead CheckIcon removed; CI + macOS + UI-Screenshots ALL GREEN
+- Round 4 verification (run 35721942096): 25/26 PASS; step-00 FAIL = pre-paint blank window (capture at 5.6s with slower 15GB scan) — root-caused to WebView2 first-paint timing, NOT an app bug
+- Launch flash polish: tauri window backgroundColor #F5F5F7 + index.html pre-CSS paint style (light #f5f5f7 / dark #1e1e20 matching tokens); ui-screenshots.yml initial sleep 3s → 5.5s so frame 00 lands post-paint
+- Bubbles label coverage fix (found via canvas pixel-sampling + debug instrumentation): old r≥30 gate left mid-size bubbles anonymous at common canvas sizes (only root container + Users qualified in a 770px viz area); now r≥19 + textAlign center (labels were left-aligned from center x — off-center defect) + two-line name/size on big bubbles (r≥64, uses the sizes tail); prefetch threshold synced (g[2]≥16)
+- Verified via canvas pixel analysis: treemap labels 774 dark-ink samples (working); bubbles label pipeline confirmed working (names resolve + repaint) — coverage now gated only by actual circle radii; Rust engine packs proportionally (Cauchy-Schwarz sqrt-shares) so the real app labels many more circles than the heuristic mock
+- Inspector card padding symmetry fix (12px 13px → 12px 14px)
+- Responsive audit script extended (1280/1440/1680/1920 × treemap/folders/monitor/snapshots = 16 frames); programmatic overflow check: ZERO doc/panel overflow at all 4 widths
+- Cleanup-flow verification detour: staged node_modules (151MB < 1GB free cap — the 129GB root staging correctly hit the free-tier cap + tooltip), committed to recycle bin via confirmation dialog (agent-browser coordinate clicks hit AnimatePresence exit clones — direct DOM .click() works; mock-only harness quirk), queue emptied + tree updated correctly; 54-row diff with magnitude bars VLM-verified (proportional lengths, hierarchy, different-roots warning banner validated)
+- Monitor tab verified with full ring: VLM confirms sparkline area fills + baselines, readable process table; earlier "empty sparklines" = capture before samples accumulated (2s cadence)
+
+Stage Summary:
+- Round 6 ready: bubbles label coverage/alignment/two-line, launch flash fixes, inspector padding, responsive audit
+- CI loop fully operational: 5 consecutive rounds green (baseline, r1, r2-panic-fix, r3, r4, r5); panic fix + sizes tail + two-line labels all confirmed on real Windows builds
+- Next: push round 6 → verify CI screenshots (bubbles labels + launch frame), remaining: LicenseDialog/PreviewOverlay micro-audit, dark-theme CI pass

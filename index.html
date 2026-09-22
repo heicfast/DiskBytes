@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DiskBytes</title>
+    <style>
+      /* Pre-CSS paint: the WebView's first frame matches the app canvas
+         (#F5F5F7 light / #1C1C20 dark) instead of flashing white before
+         the stylesheet arrives. Pairs with the window backgroundColor. */
+      html {
+        background: #f5f5f7;
+      }
+      html[data-theme="dark"] {
+        background: #1e1e20;
+      }
+    </style>
     <script>
       // Pre-mount theme application (BuildPrompt §14): the saved theme
       // (localStorage) or prefers-color-scheme is applied BEFORE React
