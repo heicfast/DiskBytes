@@ -1,8 +1,11 @@
 //! Layout engines (`BuildPrompt` §7 + doc 02 §5).
 //!
-//! Layouts are computed IN RUST and returned as a flat binary buffer of
-//! fixed-size `#[repr(C)]` 32-byte cells plus a small JSON metadata block.
-//! Never more than 20,000 cells per layout.
+//! Layouts are computed IN RUST and returned as a flat binary frame:
+//! `[u32 meta_len LE][meta JSON][cells × 32 B][sizes × 8 B]` — each cell
+//! is a fixed-size `#[repr(C)]` 32-byte record, followed by a tail of one
+//! little-endian `u64` on-disk size per cell (same order; consumed by the
+//! JS twin for two-line "name / size" cell labels). Never more than
+//! 20,000 cells per layout.
 //!
 //! Cell geometry is 5 × f32 whose meaning depends on the mode:
 //! - **Treemap / Flame**: `[x, y, w, h, spare]`
@@ -11,7 +14,7 @@
 //! - **Mind Map**: `[x, y, r, parent_x, parent_y]` (link = curve to parent)
 //!
 //! `rgba` is packed `0xRRGGBBAA` and serialized little-endian field-wise
-//! (the JS twin decodes with `DataView` — see `src/viz/decode.ts`).
+//! (the JS twin decodes with `DataView` — see `src/viz/layoutIpc.ts`).
 
 pub mod bubbles;
 pub mod flame;

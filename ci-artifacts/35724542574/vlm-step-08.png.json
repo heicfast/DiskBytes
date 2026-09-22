@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing folder scan results with details panel.\n(2) QUALITY: PASS. UI renders correctly, multi-color bars and tooltips display properly.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790079098,
+  "id": "20260922201136e40632448b7349f4",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922201136e40632448b7349f4",
+  "usage": {
+    "completion_tokens": 36,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1111
+  }
+}

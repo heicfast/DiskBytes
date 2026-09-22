@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Applications view, currently scanning and measuring bundle sizes.\n(2) QUALITY: PASS. UI renders correctly with proper colors, alignment, and active loading state.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790079111,
+  "id": "202609222011509e3a81abc2eb4e74",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609222011509e3a81abc2eb4e74",
+  "usage": {
+    "completion_tokens": 38,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1113
+  }
+}

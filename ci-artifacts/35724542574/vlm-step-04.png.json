@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view showing a \"By folder\" sunburst visualization of the DiskBytesTest directory.\n(2) QUALITY: PASS. Multi-color visualization renders correctly with no broken or misaligned UI elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790079071,
+  "id": "20260922201109f749d48a3c574f14",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922201109f749d48a3c574f14",
+  "usage": {
+    "completion_tokens": 46,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1121
+  }
+}

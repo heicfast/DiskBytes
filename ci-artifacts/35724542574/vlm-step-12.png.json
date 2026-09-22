@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Treemap view of a specific folder (DiskBytesTest) after a completed scan.\n(2) QUALITY: PASS. Multi-color treemap renders correctly with clear labels and no UI misalignment.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790079106,
+  "id": "20260922201144f01fe4734da0441f",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260922201144f01fe4734da0441f",
+  "usage": {
+    "completion_tokens": 46,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1121
+  }
+}

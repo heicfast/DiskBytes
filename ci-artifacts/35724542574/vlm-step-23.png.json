@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) MODE: Explore view with \"By age\" treemap and Cleanup Queue modal open.\n(2) QUALITY: PASS. UI renders correctly with clear multi-color visualization and no broken elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790079126,
+  "id": "202609222012056e2239df0a4846a6",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609222012056e2239df0a4846a6",
+  "usage": {
+    "completion_tokens": 42,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1075,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1117
+  }
+}
