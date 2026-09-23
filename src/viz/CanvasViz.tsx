@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bytes } from "../lib/format";
 import { abbreviate } from "./abbrev";
 import {
-  CELL_KIND, DIR_BIT, cssRgba, getLayout, getNames, type Cell, type GroupDesc, type LayoutResult,
+  CELL_KIND, DIR_BIT, cssRgba, cssRgbaTheme, getLayout, getNames, type Cell, type GroupDesc, type LayoutResult,
 } from "./layoutIpc";
 
 /** Synthetic regroup ids (by-type/by-age group cells) live at/above this
@@ -429,9 +429,12 @@ function drawCells(
     }
   }
 
+  // Dark theme: enrich the pastel families (saturation boost at
+  // constant lightness) — see cssRgbaTheme. Read once per paint.
+  const darkCells = document.documentElement.getAttribute("data-theme") === "dark";
   for (const c of layout.cells) {
     const kind = c.flags & 0b111;
-    const fill = cssRgba(c.rgba);
+    const fill = cssRgbaTheme(c.rgba, darkCells);
     if (kind === CELL_KIND.RECT) {
       const [x, y, rw, rh] = c.g;
       ctx.fillStyle = fill;

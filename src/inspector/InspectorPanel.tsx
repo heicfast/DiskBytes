@@ -22,6 +22,15 @@ import { useCleanupStore } from "../state/cleanup";
 
 const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
 
+/** Stable tone for an item: hash the PATH (stable across scans and
+ * generations). The old id-modulo made the same folder change icon
+ * color between scans — node ids are scan-local. */
+function toneFor(path: string): string {
+  let h = 5381;
+  for (let i = 0; i < path.length; i++) h = ((h << 5) + h + path.charCodeAt(i)) | 0;
+  return TONES[Math.abs(h) % TONES.length];
+}
+
 export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void }) {
   const generation = useScanStore((s) => s.generation);
   const status = useScanStore((s) => s.status);
@@ -108,7 +117,7 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
   return (
     <aside className="db-inspector db-scroll" aria-label="Inspector">
       <div className="db-inspector-title">
-        <span className={`db-file-icon tone-${TONES[details.id % TONES.length]}`}>
+        <span className={`db-file-icon tone-${toneFor(details.path)}`}>
           <KindIcon size={24} />
         </span>
         <div>
@@ -235,7 +244,7 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
         onClick={doStage}
       >
         {staged ? <CheckIcon size={15} /> : <Trash2Icon size={15} />}
-        {staged ? "Staged for Cleanup ✓" : details.isProtected ? "Managed by Windows" : "Add to Cleanup"}
+        {staged ? "Staged for Cleanup" : details.isProtected ? "Managed by Windows" : "Add to Cleanup"}
       </button>
       {details.isProtected && (
         <div className="db-cloud-note" style={{ marginTop: 8 }}>

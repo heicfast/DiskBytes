@@ -40,6 +40,25 @@ export function CleanupQueuePopover({
   const [committing, setCommitting] = useState(false);
   const [failure, setFailure] = useState<{ count: number; failed: CommitFailure[]; error: string | null } | null>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  // Anchor to the toolbar Cleanup button's live position instead of a
+  // hardcoded top:96 — the degrade banner shifts the topbar down and a
+  // fixed offset leaves the popover floating detached from its button.
+  const [anchorPos, setAnchorPos] = useState<{ right: number; top: number } | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setAnchorPos(null);
+      return;
+    }
+    const measure = () => {
+      const btn = document.querySelector<HTMLButtonElement>(".db-queue-button");
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      setAnchorPos({ right: Math.max(18, window.innerWidth - r.right), top: r.bottom + 10 });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -115,7 +134,7 @@ export function CleanupQueuePopover({
         <motion.div
           ref={popRef}
           className="db-pop"
-          style={anchor === "topbar" ? { right: 18, top: 96 } : undefined}
+          style={anchor === "topbar" && anchorPos ? { right: anchorPos.right, top: anchorPos.top } : undefined}
           role="dialog"
           aria-label="Cleanup Queue"
           initial={{ opacity: 0, y: -8, scale: 0.97 }}

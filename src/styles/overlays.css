@@ -556,25 +556,17 @@
   color: var(--ink);
 }
 
-/* Toast (bottom-center, transient feedback) — springs up from below
- * with a slight overshoot; icon carries the ink accent. */
-@keyframes db-toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(14px) scale(0.97);
-  }
-  60% {
-    transform: translateX(-50%) translateY(-2px) scale(1.005);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
+/* Toast (bottom-center, transient feedback) — motion handled by
+ * framer-motion in App.tsx (spring in, slide-fade out). Centering uses
+ * margin auto (NOT translateX) so the transform channel stays free. */
 .db-toast {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 26px;
+  margin: 0 auto;
+  width: max-content;
+  max-width: min(88vw, 560px);
   z-index: 120;
   display: flex;
   align-items: center;
@@ -586,7 +578,6 @@
   padding: 10px 16px;
   font-size: 12px;
   font-weight: 620;
-  animation: db-toast-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
 }
 .db-toast svg {
   color: var(--ink);

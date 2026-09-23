@@ -551,11 +551,15 @@ const commands: Record<string, Cmd> = {
     return rows;
   },
   get_breadcrumb: (a) => {
+    // Parity with Rust compute_breadcrumb: the chain INCLUDES the scan
+    // root (the mock used to stop before node 0, so dev showed one
+    // fewer crumb than production).
     const chain: { id: number; name: string; size: number }[] = [];
     let cur = Number(a.node);
     const ids: number[] = [];
-    while (cur >= 0 && cur !== 0) {
+    while (Number.isInteger(cur) && cur >= 0 && tree.nodes[cur] !== undefined) {
       ids.unshift(cur);
+      if (cur === 0) break;
       cur = tree.nodes[cur].parent;
     }
     for (const id of ids) {

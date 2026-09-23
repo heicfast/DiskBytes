@@ -260,7 +260,7 @@ export function MonitorView() {
             Show all {procsSorted.length.toLocaleString()}
           </button>
         )}
-        {showAll && (
+        {showAll && procsSorted.length > 14 && (
           <button type="button" className="db-vol-more" style={{ marginTop: 6 }} onClick={() => setShowAll(false)}>
             Show top 14
           </button>

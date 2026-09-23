@@ -28,16 +28,23 @@ export function ApplicationsView() {
   const [uninstalling, setUninstalling] = useState(false);
   const [failPaths, setFailPaths] = useState<string[] | null>(null);
 
+  // Esc closes the uninstall confirm — every other dialog (license,
+  // preview, queue) closes on Esc; this one was the lone exception.
+  useEffect(() => {
+    if (!confirm) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirm(null);
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [confirm]);
+
   useEffect(() => {
     if (apps === null && !busy) {
       void load();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  if (status !== "done" && status !== "idle") {
-    void 0;
-  }
 
   if (status === "idle" || status === "scanning") {
     return (
@@ -187,7 +194,14 @@ export function ApplicationsView() {
                 {app.leftovers.map((g) => (
                   <div className="db-app-detail-row" key={g.label}>
                     <span>{g.label}</span>
-                    <div>{g.paths.map((p) => p.path).join(" · ")}</div>
+                    {/* One TailPath line per path — a joined "p1 · p2"
+                     * string would blunt-clip with no ellipsis (the
+                     * container has overflow:hidden; nowrap). */}
+                    <div>
+                      {g.paths.map((p) => (
+                        <TailPath key={p.path} path={p.path} />
+                      ))}
+                    </div>
                     <b className="tnum">{bytes(g.size)}</b>
                   </div>
                 ))}

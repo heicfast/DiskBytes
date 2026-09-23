@@ -42,6 +42,10 @@ export function SnapshotsView() {
   const [after, setAfter] = useState<string | null>(null);
   const [diff, setDiff] = useState<DiffView | null>(null);
   const [diffing, setDiffing] = useState(false);
+  // Two-step delete: the first click arms "Delete?" on the row (danger),
+  // the second confirms. Snapshots are irreversible user data — every
+  // other destructive action in the app confirms first; this did not.
+  const [armDel, setArmDel] = useState<string | null>(null);
 
   const refresh = async () => {
     try {
@@ -82,6 +86,7 @@ export function SnapshotsView() {
   };
 
   const del = async (id: string) => {
+    setArmDel(null);
     await invoke("delete_snapshot", { id }).catch(() => undefined);
     if (before === id) setBefore(null);
     if (after === id) setAfter(null);
@@ -160,8 +165,16 @@ export function SnapshotsView() {
               {diffing ? "Diffing…" : "Compare"}
             </button>
           )}
-          <button type="button" className="db-icon-button" style={{ width: 30, height: 30 }} aria-label={`Delete snapshot ${s.id}`} onClick={() => void del(s.id)}>
-            <Trash2Icon size={13} />
+          <button
+            type="button"
+            className={`db-icon-button ${armDel === s.id ? "db-del-armed" : ""}`}
+            style={armDel === s.id ? { width: "auto", height: 30, padding: "0 10px", fontSize: 11 } : { width: 30, height: 30 }}
+            aria-label={armDel === s.id ? `Confirm delete snapshot ${s.id}` : `Delete snapshot ${s.id}`}
+            title={armDel === s.id ? "Click again to delete permanently" : "Delete snapshot"}
+            onClick={() => (armDel === s.id ? void del(s.id) : setArmDel(s.id))}
+            onBlur={() => armDel === s.id && setArmDel(null)}
+          >
+            {armDel === s.id ? "Delete?" : <Trash2Icon size={13} />}
           </button>
         </div>
       ))}
@@ -194,11 +207,11 @@ export function SnapshotsView() {
               <span>Loading both snapshots…</span>
             </div>
           )}
-          {diff?.changes.map((c) => {
-            const maxAbs = Math.max(
-              1,
-              ...diff.changes.map((x) => Math.abs(x.delta)),
-            );
+          {(() => {
+            const d = diff;
+            if (!d) return null;
+            const maxAbs = Math.max(1, ...d.changes.map((x) => Math.abs(x.delta)));
+            return d.changes.map((c) => {
             const pct = Math.max(2, (Math.abs(c.delta) / maxAbs) * 100);
             return (
               <div className="db-diff-row" key={c.path} title={c.path}>
@@ -221,8 +234,9 @@ export function SnapshotsView() {
                   />
                 </span>
               </div>
-            );
-          })}
+              );
+            });
+          })()}
           {diff && diff.changes.length === 0 && <div className="db-substate">No folder changed between these snapshots.</div>}
         </div>
       )}

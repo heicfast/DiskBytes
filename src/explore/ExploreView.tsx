@@ -196,18 +196,6 @@ export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) 
     void invoke("reveal_in_explorer", { generation, id: currentFolder }).catch(() => undefined);
   };
 
-  const stageNode = () => {
-    const id = selectedNode ?? currentFolder;
-    if (id == null) return;
-    void (async () => {
-      const d = await getNodeDetails(generation, id).catch(() => null);
-      if (d) {
-        stage({ id, path: d.path, size: d.size, reason: "Manual" });
-      }
-    })();
-  };
-  void stageNode;
-
   // ── Render by state ────────────────────────────────────────────────
   if (status === "idle") {
     return (

@@ -78,11 +78,16 @@ export function QuickWinsSection() {
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
     window.addEventListener("click", close);
     window.addEventListener("blur", close);
+    window.addEventListener("keydown", esc);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("blur", close);
+      window.removeEventListener("keydown", esc);
     };
   }, [menu]);
 

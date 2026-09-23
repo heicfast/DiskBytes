@@ -189,6 +189,14 @@
   color: var(--text);
   font-weight: 650;
 }
+/* Truncation crumb: compact, slightly dimmer than real ancestors. */
+.db-bcrumb-ellipsis {
+  max-width: none;
+  padding: 5px 6px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
 .db-bcrumb-sep {
   color: var(--text-tertiary);
   display: grid;

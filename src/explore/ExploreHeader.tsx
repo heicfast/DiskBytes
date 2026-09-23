@@ -98,7 +98,12 @@ export function ExploreHeader() {
 
       <p className="db-toolbar-caption">{MODE_CAPTIONS[mode]}</p>
 
-      {(COLORED_MODES.has(mode) || mode === "List" || mode === "Top Sizes") && (
+      {/* "A" abbreviate is a canvas-label-density feature (spec §7): tiny
+       * treemap/sunburst cells collide, so names compress to initials.
+       * List / Top Sizes rows are full-width — abbreviating there would
+       * destroy information for no space gain, so the toggle is
+       * canvas-only (it used to render for lists but did nothing). */}
+      {COLORED_MODES.has(mode) && (
         <button
           type="button"
           className="db-abbreviate"

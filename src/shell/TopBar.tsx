@@ -76,8 +76,13 @@ export function TopBar(props: TopBarProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [props]);
 
-  // Breadcrumb: back chevron + the last 4 ancestors, each clickable.
-  const tail = props.crumbs.slice(-4);
+  // Breadcrumb: back chevron + ancestors. Deep chains truncate to the
+  // last 3 with a leading ellipsis crumb that jumps to the scan root
+  // (full path in its tooltip) — without it, an 8-deep drill shows
+  // "Google > Chrome > …" with no hint that Users/AppData are above.
+  const full = props.crumbs;
+  const truncated = full.length > 4;
+  const tail = truncated ? full.slice(-3) : full;
   const isExplore = tab === "explore";
 
   return (
@@ -116,6 +121,21 @@ export function TopBar(props: TopBarProps) {
           <ChevronLeftIcon size={16} />
         </button>
         {tail.length === 0 && <span className="db-bcrumb current">—</span>}
+        {truncated && (
+          <>
+            <button
+              type="button"
+              className="db-bcrumb db-bcrumb-ellipsis"
+              onClick={() => props.onNavigateCrumb(full[0].id)}
+              title={full.map((c) => c.name).join(" › ")}
+            >
+              …
+            </button>
+            <span className="db-bcrumb-sep">
+              <ChevronRightIcon size={12} />
+            </span>
+          </>
+        )}
         {tail.map((c, i) => (
           <span key={c.id} style={{ display: "contents" }}>
             {i > 0 && (

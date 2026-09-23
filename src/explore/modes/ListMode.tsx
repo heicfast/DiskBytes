@@ -3,7 +3,7 @@
  * mini share-of-parent bar, %, size; disclosure triangles only for
  * non-empty folders; 500 children per level cap.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRightIcon, FolderIcon, LockKeyholeIcon, CloudIcon } from "../../components/Icon";
 import { categoryIcon } from "../../components/Icon";
@@ -68,7 +68,6 @@ export function ListMode(props: ListModeProps) {
   });
 
   const totalItems = tree?.length ?? 0;
-  const abbreviation = useMemo(() => false, []);
 
   if (!tree) {
     return (
@@ -149,7 +148,6 @@ export function ListMode(props: ListModeProps) {
                   <b style={{ width: `${Math.max(2, Math.min(100, row.share * 100))}%`, background: `#${row.color.toString(16).padStart(6, "0")}` }} />
                 </i>
                 <em className="tnum">{(row.share * 100).toFixed(1)}%</em>
-                <span className="tnum">{row.isDir ? "" : abbreviation ? "" : ""}</span>
                 <b className="tnum">{bytes(row.size)}</b>
               </button>
             );

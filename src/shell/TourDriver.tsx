@@ -15,6 +15,11 @@ import { useCleanupStore } from "../state/cleanup";
 interface Step {
   name: string;
   apply: () => void;
+  /** Dwell multiplier (× DWELL_MS). Theme flips need ≥2 capture passes:
+   * the CI harness samples every 2.6 s, so a 1× dwell can fall entirely
+   * between captures — round 16's tour never captured dark mode at all
+   * (all 26 frames light). 3× guarantees ≥2 samples per theme. */
+  dwell?: number;
 }
 
 const DWELL_MS = 2600;
@@ -59,13 +64,16 @@ export function TourDriver() {
           },
         });
       }
-      // theme dark
+      // theme flips — 3× dwell (see Step.dwell): guarantees the CI
+      // 2.6 s capture cadence samples each theme at least twice
       steps.push({
         name: "dark-theme",
+        dwell: 3,
         apply: () => document.documentElement.setAttribute("data-theme", "dark"),
       });
       steps.push({
         name: "light-theme",
+        dwell: 3,
         apply: () => document.documentElement.setAttribute("data-theme", "light"),
       });
       // the other tabs
@@ -101,7 +109,7 @@ export function TourDriver() {
         step.apply();
         (window as unknown as Record<string, unknown>).__DB_TOUR_STATE = { step: i, name: step.name, total: steps.length };
         i += 1;
-        if (i < steps.length) timer = window.setTimeout(advance, DWELL_MS);
+        if (i < steps.length) timer = window.setTimeout(advance, DWELL_MS * (step.dwell ?? 1));
         else (window as unknown as Record<string, unknown>).__DB_TOUR_DONE = true;
       };
       advance();

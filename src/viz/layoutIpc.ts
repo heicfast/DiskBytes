@@ -200,6 +200,49 @@ export function cssRgba(rgba: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+/**
+ * Dark-theme cell enrichment: the pastel families were tuned for the
+ * light canvas; on #1e1e20 they read milky/washed-out (final VLM gate:
+ * "colors slightly washed out, small labels lose punch"). Boost
+ * saturation ~18% (HSL) while keeping lightness — cells stay pastel
+ * but pop against the dark surface. Wire colors are untouched; this is
+ * purely a presentation-layer adjustment.
+ */
+export function cssRgbaTheme(rgba: number, dark: boolean): string {
+  if (!dark) return cssRgba(rgba);
+  const r = ((rgba >>> 24) & 0xff) / 255;
+  const g = ((rgba >>> 16) & 0xff) / 255;
+  const b = ((rgba >>> 8) & 0xff) / 255;
+  const a = (rgba & 0xff) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`;
+  const d = max - min;
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const s2 = Math.min(1, s * 1.18);
+  // Reconstruct chroma with the boosted saturation at the same lightness.
+  const c2 = (1 - Math.abs(2 * l - 1)) * s2;
+  const hPrime = (() => {
+    if (max === r) return ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    if (max === g) return ((b - r) / d + 2) / 6;
+    return ((r - g) / d + 4) / 6;
+  })();
+  const x = c2 * (1 - Math.abs(((hPrime * 6) % 2) - 1));
+  const m = l - c2 / 2;
+  let r2 = 0;
+  let g2 = 0;
+  let b2 = 0;
+  const seg = Math.floor(hPrime * 6) % 6;
+  if (seg === 0) { r2 = c2; g2 = x; }
+  else if (seg === 1) { r2 = x; g2 = c2; }
+  else if (seg === 2) { g2 = c2; b2 = x; }
+  else if (seg === 3) { g2 = x; b2 = c2; }
+  else if (seg === 4) { r2 = x; b2 = c2; }
+  else { r2 = c2; b2 = x; }
+  return `rgba(${Math.round((r2 + m) * 255)},${Math.round((g2 + m) * 255)},${Math.round((b2 + m) * 255)},${a})`;
+}
+
 /** Cell kind flags (mirrors core layout::cell_kind). */
 export const CELL_KIND = {
   RECT: 0,

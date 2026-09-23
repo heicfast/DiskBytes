@@ -531,6 +531,14 @@
 .db-snap-row > svg {
   color: var(--text-tertiary);
 }
+/* Armed delete state (two-step confirm): danger tint, keeps the row's
+ * 30px rhythm while widening to fit the "Delete?" label. */
+.db-icon-button.db-del-armed {
+  background: var(--used-soft);
+  border-color: var(--used);
+  color: var(--used);
+  font-weight: 700;
+}
 .db-snap-row > div {
   min-width: 0;
 }

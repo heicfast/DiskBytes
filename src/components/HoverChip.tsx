@@ -4,7 +4,7 @@
  * imperative handle (hover NEVER re-renders React — spec §9 pitfall).
  */
 import { createElement, forwardRef, useImperativeHandle, useRef } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { categoryIcon, FolderIcon } from "./Icon";
 
 export interface HoverChipHandle {
@@ -43,6 +43,10 @@ export const HoverChip = forwardRef<HoverChipHandle, { sizeFmt: (b: number) => s
 ) {
   const root = useRef<HTMLDivElement>(null);
   const visible = useRef(false);
+  // Persistent icon root: created ONCE on first show, re-rendered after.
+  // The old code called createRoot() on every hover and never unmounted
+  // — every hover leaked a detached React root (fiber state retained).
+  const iconRoot = useRef<Root | null>(null);
 
   useImperativeHandle(ref, () => ({
     show(data, x, y) {
@@ -53,11 +57,13 @@ export const HoverChip = forwardRef<HoverChipHandle, { sizeFmt: (b: number) => s
       const icon = el.querySelector<HTMLElement>(".db-hc-icon");
       if (icon) {
         icon.style.background = `#${(data.categoryColor || 0xcbd5e1).toString(16).padStart(6, "0")}dd`;
-        // Render the glyph into a detached root, then move the node.
-        const host = document.createElement("span");
-        const root = createRoot(host);
-        root.render(createElement(Icon, { size: 15 }));
-        icon.replaceChildren(host);
+        // Lazy-init the persistent root, then re-render the glyph into it.
+        if (!iconRoot.current) {
+          const host = document.createElement("span");
+          iconRoot.current = createRoot(host);
+          icon.replaceChildren(host);
+        }
+        iconRoot.current.render(createElement(Icon, { size: 15 }));
       }
       const strong = el.querySelector<HTMLElement>(".db-hc-body > strong");
       if (strong) strong.textContent = data.name;

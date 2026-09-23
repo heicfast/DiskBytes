@@ -7,6 +7,7 @@
  * hook §15 — CI screenshot tours).
  */
 import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { TopBar } from "./shell/TopBar";
 import { Sidebar } from "./sidebar";
@@ -226,12 +227,22 @@ function AppShell() {
 
       <CleanupQueuePopover open={queueOpen} onClose={() => setQueueOpen(false)} anchor="topbar" />
       <LicenseDialog open={licenseOpen} onClose={() => setLicenseOpen(false)} />
-      {toast && (
-        <div className="db-toast" role="status">
-          {toastIcon === "trash" ? <Trash2Icon size={15} /> : toastIcon === "shield" ? <ShieldIcon size={15} /> : <CheckIcon size={15} />}
-          {toast}
-        </div>
-      )}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key="toast"
+            className="db-toast"
+            role="status"
+            initial={{ opacity: 0, y: 18, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+          >
+            {toastIcon === "trash" ? <Trash2Icon size={15} /> : toastIcon === "shield" ? <ShieldIcon size={15} /> : <CheckIcon size={15} />}
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <TourDriver />
     </div>
   );

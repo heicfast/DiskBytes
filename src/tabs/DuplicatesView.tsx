@@ -170,9 +170,10 @@ export function DuplicatesView() {
                 return (
                   <div key={p} className="db-dup-file">
                     <FileIcon size={15} />
+                    {/* Path only — the size lives once, in the right
+                     * column (it used to repeat under the path too). */}
                     <div>
                       <TailPath path={p} />
-                      <small>{bytes(g.size)}</small>
                     </div>
                     {isKept ? (
                       <span className="db-keep-tag keep">
