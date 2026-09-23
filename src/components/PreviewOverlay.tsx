@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppWindowIcon, ExternalLinkIcon, FileIcon, XIcon, CloudIcon } from "./Icon";
 import { getNodeDetails, previewText, type NodeDetailsData } from "../viz/exploreIpc";
 import { bytes } from "../lib/format";
+import { IS_MAC } from "../lib/platform";
 import { Spinner } from "./buttons";
 
 export function PreviewOverlay({
@@ -82,10 +83,27 @@ export function PreviewOverlay({
   const size = details?.size ?? 0;
   const catColor = details ? `#${details.kindColor.toString(16).padStart(6, "0")}` : undefined;
 
-  const assetUrl = (asyncPath: string): string => {
-    // Tauri asset protocol (read-only) — convertPathProtocol equivalent.
-    void asyncPath;
-    return `asset://${encodeURI(`C:/${name}`)}`;
+  // Asset URL from the node's FULL path. The old stub built
+  // `asset://C:/${name}` — filename only — so any file not directly in
+  // C:\ pointed at a nonexistent URL (a C:\Users\dev\Pictures\IMG.jpg
+  // preview tried to load C:/IMG.jpg). Use Tauri's own converter when
+  // running under the runtime; mirror its scheme form for browser dev.
+  const assetUrl = (): string => {
+    const p = details?.path ?? "";
+    if (!p) return "";
+    const internals = (
+      window as unknown as {
+        __TAURI_INTERNALS__?: { convertFileSrc?: (path: string, protocol: string) => string };
+      }
+    ).__TAURI_INTERNALS__;
+    if (typeof internals?.convertFileSrc === "function") {
+      return internals.convertFileSrc(p, "asset");
+    }
+    // Browser-dev approximation (assets don't load outside the runtime
+    // anyway): Tauri 2 forms — http://asset.localhost on WebView2,
+    // asset://localhost on WKWebView.
+    const enc = encodeURIComponent(p);
+    return IS_MAC ? `asset://localhost/${enc}` : `http://asset.localhost/${enc}`;
   };
 
   return (
@@ -112,10 +130,10 @@ export function PreviewOverlay({
               <p style={{ fontSize: 11, marginTop: -4 }}>Previews are disabled so nothing gets downloaded.</p>
             </div>
           )}
-          {kind === "image" && <img src={assetUrl(name)} alt={name} />}
-          {kind === "video" && <video src={assetUrl(name)} controls />}
-          {kind === "audio" && <audio src={assetUrl(name)} controls style={{ width: "80%" }} />}
-          {kind === "pdf" && <iframe src={assetUrl(name)} title={name} />}
+          {kind === "image" && <img src={assetUrl()} alt={name} />}
+          {kind === "video" && <video src={assetUrl()} controls />}
+          {kind === "audio" && <audio src={assetUrl()} controls style={{ width: "80%" }} />}
+          {kind === "pdf" && <iframe src={assetUrl()} title={name} />}
           {kind === "text" && (
             <pre>{text?.text ?? "…"}</pre>
           )}

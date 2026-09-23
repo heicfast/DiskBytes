@@ -330,6 +330,10 @@ export class MockTree {
   }
 
   pathOf(id: number): string {
+    // Parity with core node_path: the synthetic This-PC root yields the
+    // LABEL "This PC", not a real path (the mock used to return "C:\",
+    // so the frontend's virtual-root staging guard never fired in dev).
+    if (id === 0) return "This PC";
     const parts: string[] = [];
     let cur = id;
     while (cur >= 0 && cur !== 0) {

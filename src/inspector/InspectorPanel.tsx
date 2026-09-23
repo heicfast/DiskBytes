@@ -107,9 +107,14 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
   const KindIcon = details.isDir ? FolderIcon : categoryIcon(details.kind);
   const staged = contains(details.id);
   const kindColor = `#${details.kindColor.toString(16).padStart(6, "0")}`;
+  // The synthetic This-PC root (multi-drive scan): node_path yields the
+  // LABEL "This PC", not a real path. Staging it would hand the shell a
+  // nonexistent path — the commit fails with a confusing alert. Real
+  // roots always carry a separator/drive marker (C:\, /home/…).
+  const isVirtualRoot = details.id === 0 && !/[\\/:]/.test(details.path);
 
   const doStage = () => {
-    if (details.isProtected) return;
+    if (details.isProtected || isVirtualRoot) return;
     if (staged) unstage(details.id);
     else stage({ id: details.id, path: details.path, size: details.size, reason: "Manual" });
   };
@@ -239,12 +244,26 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
       <button
         type="button"
         className={`db-cleanup ${staged ? "is-staged" : ""}`}
-        disabled={details.isProtected}
-        title={details.isProtected ? "Windows manages this item" : staged ? "Staged — click to unstage" : "Add to the Cleanup Queue"}
+        disabled={details.isProtected || isVirtualRoot}
+        title={
+          details.isProtected
+            ? "Windows manages this item"
+            : isVirtualRoot
+              ? "This PC is a view of all drives — open a drive or folder, then stage what you want to clean"
+              : staged
+                ? "Staged — click to unstage"
+                : "Add to the Cleanup Queue"
+        }
         onClick={doStage}
       >
         {staged ? <CheckIcon size={15} /> : <Trash2Icon size={15} />}
-        {staged ? "Staged for Cleanup" : details.isProtected ? "Managed by Windows" : "Add to Cleanup"}
+        {staged
+          ? "Staged for Cleanup"
+          : details.isProtected
+            ? "Managed by Windows"
+            : isVirtualRoot
+              ? "Open a drive or folder first"
+              : "Add to Cleanup"}
       </button>
       {details.isProtected && (
         <div className="db-cloud-note" style={{ marginTop: 8 }}>
