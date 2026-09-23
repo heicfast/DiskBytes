@@ -117,10 +117,7 @@ pub fn take_snapshot(
     // targeted a nonexistent subdirectory) plus the drive colon.
     let id = format!(
         "{}-{}",
-        root_path
-            .replace('\\', "-")
-            .replace('/', "-")
-            .replace(':', ""),
+        root_path.replace(['\\', '/'], "-").replace(':', ""),
         taken_at
     );
     let snap = Snapshot::build(id, root_path, taken_at, pairs);
