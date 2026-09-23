@@ -12,8 +12,17 @@ export type Mode = (typeof MODES)[number];
 export const CANVAS_MODES = new Set<Mode>(["Treemap", "Sunburst", "Flame", "Bubbles", "Mind Map"]);
 /** Modes that show the color-mode segmented control (spec §7). */
 export const COLORED_MODES = new Set<Mode>(["Treemap", "Sunburst", "Flame", "Bubbles", "Mind Map"]);
-/** Modes that show the depth slider (spec §7). */
-export const DEPTH_MODES = new Set<Mode>(["Treemap", "Sunburst", "Flame"]);
+/** Modes that show the depth slider (spec §7). Mind Map + Bubbles are
+ *  depth-driven layouts (rings / nesting = levels) — both engines take
+ *  the full 2–10 range; the old exclusion predates their full-depth
+ *  ports (the mock used to render only 2 levels regardless). */
+export const DEPTH_MODES = new Set<Mode>([
+  "Treemap",
+  "Sunburst",
+  "Flame",
+  "Bubbles",
+  "Mind Map",
+]);
 
 export const MODE_CAPTIONS: Record<Mode, string> = {
   Folders: "Browse folder by folder, sized as you go",
