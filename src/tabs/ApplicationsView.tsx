@@ -4,10 +4,11 @@
  * dialog (Run uninstaller / Stage leftovers only / Cancel); failure
  * alert with Restart-as-administrator.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppWindowIcon, CheckIcon, PackageOpenIcon, RefreshCwIcon, Trash2Icon, ShieldIcon } from "../components/Icon";
 import { TailPath } from "../components/TailPath";
 import { EmptyState, Spinner } from "../components/buttons";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import { bytes, relativeAge } from "../lib/format";
 import { invoke } from "../lib/ipc";
 import { useApplicationsStore, type AppEntry, type UninstallResult } from "../state/applications";
@@ -27,6 +28,8 @@ export function ApplicationsView() {
   const [confirm, setConfirm] = useState<AppEntry | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
   const [failPaths, setFailPaths] = useState<string[] | null>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(confirmRef, confirm !== null);
 
   // Esc closes the uninstall confirm — every other dialog (license,
   // preview, queue) closes on Esc; this one was the lone exception.
@@ -217,7 +220,7 @@ export function ApplicationsView() {
 
       {confirm && (
         <div className="db-scrim" role="dialog" aria-modal="true">
-          <div className="db-dialog">
+          <div className="db-dialog" ref={confirmRef}>
             <h3>Uninstall {confirm.name}?</h3>
             <p>
               <b>{bytes(confirm.bundleSize)}</b> program files · <b>{bytes(confirm.leftovers.reduce((a, g) => a + g.size, 0))}</b> leftovers.

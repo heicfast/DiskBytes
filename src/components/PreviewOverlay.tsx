@@ -9,6 +9,7 @@ import { AppWindowIcon, ExternalLinkIcon, FileIcon, XIcon, CloudIcon } from "./I
 import { getNodeDetails, previewText, type NodeDetailsData } from "../viz/exploreIpc";
 import { bytes } from "../lib/format";
 import { IS_MAC } from "../lib/platform";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import { Spinner } from "./buttons";
 
 export function PreviewOverlay({
@@ -26,6 +27,8 @@ export function PreviewOverlay({
   const [text, setText] = useState<{ text: string; truncated: boolean } | null>(null);
   const [kind, setKind] = useState<"loading" | "image" | "video" | "audio" | "pdf" | "text" | "other" | "cloud">("loading");
   const escRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(boxRef, true);
 
   useEffect(() => {
     let disposed = false;
@@ -108,7 +111,7 @@ export function PreviewOverlay({
 
   return (
     <div className="db-scrim" role="dialog" aria-modal="true" aria-label={`Preview ${name}`}>
-      <div className="db-preview">
+      <div className="db-preview" ref={boxRef}>
         <div className="db-preview-head">
           <FileIcon size={16} style={{ color: catColor }} />
           <strong title={name}>{name || "…"}</strong>

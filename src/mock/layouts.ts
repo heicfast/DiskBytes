@@ -459,60 +459,111 @@ export function buildLayout(
       }
     }
   } else if (mode === "mind-map") {
+    // Faithful port of core/src/layout/mindmap.rs — the old heuristic
+    // (uniform angles + uncapped sqrt(share)*rMax dots) degenerated at
+    // single-branch roots (This PC → C: put a 127 px "child" dot 7 px
+    // from center) and only ever rendered 2 levels. The Rust engine:
+    // angular spans ∝ weight, recursive rings (step_r per level), dot
+    // radius capped at DOT_BASE, alpha tiers at the branch level.
     const cx = width / 2;
     const cy = height / 2;
-    const sum = kids.reduce((a, b) => a + b.v, 0) || 1;
-    const rMax = Math.min(width, height) / 2 - 44;
-    // Pull any dot (plus its radius + label air) inside the canvas: the
-    // sub-dots used to render at parent_r + sub_r + 14 which pushed the
-    // 12-o'clock branch straight through the top edge (VLM: "labels
-    // clipped by the container"). Mirrors the Rust engine's r_max margin.
-    const clampInside = (x: number, y: number, r: number): [number, number] => {
-      const dx = x - cx;
-      const dy = y - cy;
-      const d = Math.hypot(dx, dy) || 1;
-      const maxD = Math.min(width, height) / 2 - r - 12;
-      if (d > maxD && maxD > 0) {
-        const k = maxD / d;
-        return [cx + dx * k, cy + dy * k];
-      }
-      return [x, y];
-    };
-    for (let i = 0; i < kids.length; i++) {
-      const k = kids[i];
-      const ang = (i / kids.length) * Math.PI * 2 - Math.PI / 2 + 0.18;
-      const rr = Math.max(9, Math.sqrt(k.v / sum) * rMax * 0.95);
-      const dist = rMax - rr;
-      const [x, y] = clampInside(cx + Math.cos(ang) * dist, cy + Math.sin(ang) * dist, rr);
-      const n = tree.nodes[k.node];
-      cells.push({
-        id: k.node,
-        depth: 1,
-        flags: (n.isDir ? DIR_BIT : 0) | KIND_DOT,
-        rgba: (colorFor(n, famOf(k.node), 1, colorMode, now, i) << 8) | 0xff,
-        g: [x, y, rr, cx, cy],
-      });
-      if (n.isDir && depth > 1) {
-        const sub = childrenSorted(tree, k.node).slice(0, 8);
-        const ssum = sub.reduce((a, b) => a + b.v, 0) || 1;
-        let sa = ang - 0.66;
-        let sj = 0;
-        for (const s of sub) {
-          const sr = Math.max(3.5, Math.sqrt(s.v / ssum) * rr * 0.44);
-          const sd = rr + sr + 14;
-          const [sx, sy] = clampInside(x + Math.cos(sa) * sd, y + Math.sin(sa) * sd, sr);
-          const sn = tree.nodes[s.node];
+    const DOT_BASE = 26; // core mindmap::DOT_BASE
+    const MIN_R = 1.5; // core mindmap::MIN_R
+    // Reserve the largest possible dot + air so dots never clip the
+    // edge (the deepest ring sits AT r_max); floor keeps tiny windows
+    // usable. Mirrors core `r_max` exactly.
+    const rMax = Math.max(Math.min(width, height) / 2 - DOT_BASE - 8, 48);
+    // depth of branchRoot below the layout root (+1 → tier index).
+    let branchLevel = 1;
+    for (let cur = branchRoot; cur !== rootId; ) {
+      const p = tree.nodes[cur]?.parent;
+      if (p === undefined || p < 0) break;
+      cur = p;
+      branchLevel += 1;
+    }
+    // Root dot: neutral gray, 14px (label-gate eligible — r ≥ 13 names
+    // the root, anchoring the map), at center; parent link points at
+    // itself.
+    cells.push({
+      id: rootId,
+      depth: 0,
+      flags: KIND_DOT,
+      rgba: (0x8e8e93 << 8) | 0xff,
+      g: [cx, cy, 14, cx, cy],
+    });
+    if (depth > 0 && total > 0) {
+      const layoutBranches = (
+        nodeId: number,
+        px: number,
+        py: number,
+        ringR: number,
+        depthHere: number,
+        depthLeft: number,
+        topIndex: number,
+      ): void => {
+        if (depthLeft === 0 || ringR <= 4) return;
+        const children = childrenSorted(tree, nodeId);
+        const sum = children.reduce((a, b) => a + b.v, 0);
+        if (sum === 0) return;
+        // Single sizeable child → collapse onto the parent position
+        // (mirrors Rust: the old full-TAU span bent chains toward 6
+        // o'clock, hanging the map below center at single-drive roots).
+        const collapsed = children.length === 1;
+        const stepR = ringR / depthLeft; // per-level radius step
+        const levelR = ringR - stepR * (depthLeft - 1);
+        let cursor = -Math.PI / 2; // start at 12 o'clock
+        for (let i = 0; i < children.length; i++) {
+          if (cells.length >= MAX_CELLS) return;
+          const k = children[i];
+          const kn = tree.nodes[k.node];
+          if (kn.onDisk === 0) continue;
+          const span = (k.v / sum) * Math.PI * 2;
+          const mid = cursor + span / 2;
+          const x = collapsed ? px : px + levelR * Math.cos(mid);
+          const y = collapsed ? py : py + levelR * Math.sin(mid);
+          // Dot radius ∝ sqrt(share of parent) — area ∝ bytes share.
+          // Cap scales with the ring step (blob fix, mirrors Rust).
+          const cap = Math.min(Math.max(stepR * 0.8, 10), DOT_BASE);
+          const r = Math.max(Math.sqrt(k.v / sum) * cap, MIN_R);
+          // Visibility floor: sub-2.5px dots are invisible noise.
+          if (r < 2.5) {
+            cursor += span;
+            continue;
+          }
+          // One pastel family per effective top-level branch, inherited
+          // by every descendant (shade still varies by depth + index).
+          const famIdx = nodeId === branchRoot ? i : topIndex;
+          const rgb = colorFor(kn, famIdx, depthHere, colorMode, now, i);
+          // Top-level dots (root chain + branches) stay solid; nested
+          // child dots get the slightly translucent tier.
+          const alpha = depthHere <= branchLevel ? 0xff : 0xcc;
           cells.push({
-            id: s.node,
-            depth: 2,
-            flags: (sn.isDir ? DIR_BIT : 0) | KIND_DOT,
-            rgba: (colorFor(sn, famOf(s.node), 2, colorMode, now, sj) << 8) | 0xcc,
-            g: [sx, sy, sr, x, y],
+            id: k.node,
+            depth: depthHere,
+            flags: (kn.isDir ? DIR_BIT : 0) | KIND_DOT,
+            rgba: (rgb << 8) | alpha,
+            g: [x, y, r, px, py],
           });
-          sa += 0.27;
-          sj += 1;
+          if (kn.isDir && kn.children.length > 0 && depthLeft > 1) {
+            // Child's annulus = the OUTER remainder (this level consumed
+            // stepR) — passing stepR decays geometrically and collapses
+            // the map into a concentric blob (fixed both sides). A
+            // collapsed chain node consumed no ring — budget passes
+            // through unchanged (mirrors Rust).
+            layoutBranches(
+              k.node,
+              x,
+              y,
+              collapsed ? ringR : ringR - stepR,
+              depthHere + 1,
+              depthLeft - 1,
+              famIdx,
+            );
+          }
+          cursor += span;
         }
-      }
+      };
+      layoutBranches(rootId, cx, cy, rMax, 1, depth, 0);
     }
   }
 

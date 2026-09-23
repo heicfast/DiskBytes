@@ -56,14 +56,16 @@ pub fn mindmap(
     // above that level form the solid "top-level" alpha tier.
     let branch_root = effective_branch_root(tree, node);
     let branch_level = depth_below(tree, branch_root, node) + 1;
-    // Root dot.
+    // Root dot. 14 px (not 12) so the JS label gate (r ≥ 13) names the
+    // root — the map reads as anchored on "This PC", not an anonymous
+    // gray blob.
     cells.push(Cell::dot(
         node,
         0,
         pack_rgba(0x8E8E93),
         cx,
         cy,
-        12.0,
+        14.0,
         cx,
         cy,
     ));
@@ -135,6 +137,17 @@ fn layout_branches(
     if total == 0 {
         return;
     }
+    // Single sizeable child → collapse onto the parent position: a
+    // folder with one sizeable child is visually just that child. The
+    // old full-TAU span put such a child at exactly 6 o'clock, hanging
+    // the whole map below center at single-drive roots (VLM: "crammed
+    // into the lower-central portion"). The chain keeps the full ring
+    // budget for the real branches below it.
+    let sizeable = children
+        .iter()
+        .filter(|&&id| tree.node(id).map_or(0, |c| c.on_disk) > 0)
+        .count();
+    let collapsed = sizeable == 1;
     let step_r = ring_r / depth_left as f32; // per-level radius step
     let level_r = ring_r - step_r * (depth_left as f32 - 1.0);
     let mut cursor = -std::f32::consts::FRAC_PI_2; // start at 12 o'clock
@@ -149,11 +162,32 @@ fn layout_branches(
         }
         let span = c.on_disk as f32 / total as f32 * std::f32::consts::TAU;
         let mid = cursor + span / 2.0;
-        let x = cx + level_r * mid.cos();
-        let y = cy + level_r * mid.sin();
-        // Dot radius ∝ sqrt(share of parent) — area ∝ bytes share.
+        let x = if collapsed {
+            cx
+        } else {
+            cx + level_r * mid.cos()
+        };
+        let y = if collapsed {
+            cy
+        } else {
+            cy + level_r * mid.sin()
+        };
+        // Dot radius ∝ sqrt(share of parent) — area ∝ bytes share. The
+        // cap scales with the ring step (≈ r_max/depth): an absolute
+        // 26 px cap on a small canvas (21 px steps) blobbed adjacent
+        // levels into an amorphous mass; large canvases are unchanged.
         let share = c.on_disk as f32 / total as f32;
-        let r = (DOT_BASE * share.sqrt()).max(MIN_R);
+        let cap = (step_r * 0.8).clamp(10.0, DOT_BASE);
+        let r = (cap * share.sqrt()).max(MIN_R);
+        // Visibility floor: sub-2.5 px dots are invisible specks that
+        // only add overplotting noise (VLM: "too many micro-dots").
+        // Culling sets `truncated` so the UI's "showing top N" hint
+        // stays honest.
+        if r < 2.5 {
+            *truncated = true;
+            cursor += span;
+            continue;
+        }
         // One pastel family per effective top-level branch, inherited by
         // every descendant (shade still varies by depth + sibling index).
         let fam = if node == branch_root { i } else { top_index };
@@ -177,7 +211,15 @@ fn layout_branches(
                 id,
                 x,
                 y,
-                step_r,
+                // The child's annulus is the OUTER remainder of ours —
+                // this level consumed `step_r`. Passing `step_r` (the
+                // pre-fix bug) shrank each level geometrically
+                // (r_max/depth → /(depth-1) → …), collapsing the whole
+                // map into a concentric blob around the root and
+                // cutting every level past ~4 via the `ring_r <= 4`
+                // guard at the default depth 7. A collapsed chain node
+                // consumed no ring, so it passes the budget through.
+                if collapsed { ring_r } else { ring_r - step_r },
                 depth_here + 1,
                 depth_left - 1,
                 color,
@@ -344,5 +386,81 @@ mod tests {
             "nested dots must inherit distinct branch families"
         );
         assert!(nested.iter().all(|c| c.rgba & 0xFF == ALPHA_NESTED));
+    }
+
+    /// "This PC" → "C:" → two folders, one holding a nested home dir
+    /// with files — the shape that the pre-fix ring decay collapsed.
+    fn build_deep_chain() -> Tree {
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "This PC");
+        t.append_batch(0, vec![dir("C:")]); // 1
+        t.append_batch(1, vec![dir("Users"), dir("Win")]); // 2, 3
+        t.append_batch(2, vec![dir("me")]); // 4
+        t.append_batch(
+            4,
+            vec![
+                file("a.bin", 100, 100, 1),
+                file("b.bin", 50, 50, 1),
+                file("c.bin", 25, 25, 1),
+            ], // 5..7
+        );
+        t.append_batch(3, vec![file("w.bin", 200, 200, 1)]); // 8
+        rollup::finalize(&mut t);
+        t
+    }
+
+    #[test]
+    fn deep_levels_render_across_the_full_radius_at_default_depth() {
+        // Regression: the recursion used to pass `step_r` as the child
+        // ring radius, shrinking each level geometrically (r_max/depth,
+        // then /(depth-1), …) — at the app's default request depth 7 the
+        // whole map collapsed into a ~60 px concentric blob around the
+        // root and every level past 3 vanished via the `ring_r <= 4`
+        // guard.
+        let t = build_deep_chain();
+        let w = 900.0f32;
+        let h = 700.0f32;
+        let req_depth = 7u32;
+        let buf = mindmap(&t, 0, w, h, req_depth, ColorMode::ByFolder, 1).unwrap();
+        // Level 4+ must actually emit (pre-fix: nothing past depth 3 —
+        // the ring decay hit the `ring_r <= 4` guard by level 4).
+        assert!(
+            buf.cells.iter().any(|c| c.depth >= 4),
+            "deep levels must render at default depth 7"
+        );
+        let r_max = (w.min(h) / 2.0 - DOT_BASE - 8.0).max(48.0);
+        let (cx, cy) = (w / 2.0, h / 2.0);
+        // Every dot sits ONE ring step out from its parent (level_r ==
+        // step_r algebraically); the pre-fix decay put level-2 dots
+        // 7.6 px and level-3 dots 1.5 px from their parents — concentric.
+        // Collapsed single-child chain dots sit AT their parent by
+        // design (d ≈ 0) and are skipped.
+        let min_step = r_max / req_depth as f32 * 0.75;
+        for c in &buf.cells {
+            if c.depth == 0 || (c.flags & 0b111) != crate::layout::cell_kind::DOT {
+                continue;
+            }
+            let d = ((c.g[0] - c.g[3]).powi(2) + (c.g[1] - c.g[4]).powi(2)).sqrt();
+            if d < 1.0 {
+                continue; // collapsed chain dot
+            }
+            assert!(
+                d >= min_step,
+                "dot at depth {} sits {d:.1}px from its parent (min ring step {min_step:.1}px) — rings must advance outward one step per level",
+                c.depth
+            );
+        }
+        // And the map must span the canvas, not hug the root: the
+        // farthest dot+radius reaches ≥ 40% of r_max (pre-fix ~19%).
+        let reach = buf
+            .cells
+            .iter()
+            .filter(|c| (c.flags & 0b111) == crate::layout::cell_kind::DOT)
+            .map(|c| ((c.g[0] - cx).powi(2) + (c.g[1] - cy).powi(2)).sqrt() + c.g[2])
+            .fold(0.0_f32, f32::max);
+        assert!(
+            reach >= r_max * 0.4,
+            "map must span the canvas (reach={reach}, r_max={r_max})"
+        );
     }
 }

@@ -4,9 +4,10 @@
  * Pro perks. Demo/test credentials work end-to-end; live keys drop in
  * via the Dodo dashboard without code changes (BASE_TEST/BASE_LIVE).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckIcon, KeyIcon, SparklesIcon } from "./Icon";
 import { useLicenseStore } from "../state/license";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import { bytes as fmtBytes } from "../lib/format";
 
 export function LicenseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -17,6 +18,8 @@ export function LicenseDialog({ open, onClose }: { open: boolean; onClose: () =>
   const busy = useLicenseStore((s) => s.busy);
   const error = useLicenseStore((s) => s.error);
   const [key, setKey] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +37,7 @@ export function LicenseDialog({ open, onClose }: { open: boolean; onClose: () =>
 
   return (
     <div className="db-scrim" role="dialog" aria-modal="true" aria-label="License">
-      <div className="db-dialog">
+      <div className="db-dialog" ref={dialogRef}>
         <h3>{isPro ? "DiskBytes Pro" : "Activate DiskBytes"}</h3>
         {isPro ? (
           <>

@@ -404,6 +404,10 @@ function drawCells(
 ): void {
   const mode = layout.meta.mode;
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--border").trim() || "#d8d8dd";
+  // Mind-map dot labels defer to a collision-aware pass (biggest dot
+  // first, overlapping labels dropped — the engine docs' "biggest-first,
+  // skipping collisions" promise; the inline draw collided freely).
+  const pendingDotLabels: { x: number; y: number; w: number; r: number; text: string }[] = [];
 
   // mind-map: draw links first — each takes the CHILD's own family color
   // at ~45% opacity (reference: colored bezier links, not uniform gray).
@@ -583,24 +587,50 @@ function drawCells(
           ctx.textAlign = left ? "right" : "left";
           // In-bounds clamp: dots near an edge used to push their label
           // straight through the canvas boundary (VLM: fragments like
-          // "...iberf..."). Anchor the label inside the canvas no matter
-          // where the dot sits.
+          // "...iberf..."). Resolve to an absolute LEFT edge (the
+          // collision pass draws left-anchored) and side-swap when the
+          // label would cross back over its own dot.
           const text = clipLabel(ctx, label, 110);
           if (text) {
             const tw = ctx.measureText(text).width;
-            let lx = x + (left ? -r - 5 : r + 5);
-            lx = left ? Math.max(2, lx) : Math.min(w - tw - 2, lx);
-            // If the clamped x would collide with the dot itself, drop
-            // to the other side instead of overlapping the dot.
-            if (left ? lx + tw > x - r + 2 : lx < x + r - 2) {
-              lx = left ? Math.min(w - tw - 2, x + r + 5) : Math.max(2, x - r - 5 - tw);
+            let le = left ? x - r - 5 - tw : x + r + 5;
+            if (left ? le < 2 : le + tw > w - 2) {
+              // Swap sides instead of clipping through the canvas edge.
+              le = left ? x + r + 5 : x - r - 5 - tw;
+              le = left ? Math.min(w - tw - 2, le) : Math.max(2, le);
             }
             const ly = Math.max(8, Math.min(h - 8, y - 6));
-            ctx.fillText(text, lx, ly);
+            pendingDotLabels.push({ x: le, y: ly, w: tw, r, text });
           }
           ctx.textAlign = "left";
         }
       }
+    }
+  }
+
+  // Mind-map dot labels: biggest-first with rect-collision skipping
+  // (dense levels used to render label word-clouds — VLM audits).
+  if (pendingDotLabels.length) {
+    pendingDotLabels.sort((a, b) => b.r - a.r);
+    const placed: Array<[number, number, number, number]> = [];
+    const pad = 2;
+    ctx.font = "600 10px " + uiFont();
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    for (const L of pendingDotLabels) {
+      const rect: [number, number, number, number] = [
+        L.x - pad,
+        L.y - 7 - pad,
+        L.w + pad * 2,
+        14 + pad * 2,
+      ];
+      const collide = placed.some(
+        ([px, py, pw, ph]) =>
+          rect[0] < px + pw && rect[0] + rect[2] > px && rect[1] < py + ph && rect[1] + rect[3] > py,
+      );
+      if (collide) continue;
+      placed.push(rect);
+      haloText(ctx, L.text, L.x, L.y, ON_PASTEL);
     }
   }
 

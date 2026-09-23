@@ -12,6 +12,7 @@ import { TailPath } from "./TailPath";
 import { useCleanupStore } from "../state/cleanup";
 import { useLicenseStore } from "../state/license";
 import { useScanStore } from "../state/scan";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import { bytes } from "../lib/format";
 import { BIN_NAME, IS_MAC } from "../lib/platform";
 import { invoke } from "../lib/ipc";
@@ -38,6 +39,8 @@ export function CleanupQueuePopover({
   const scanStatus = useScanStore((s) => s.status);
   const [confirming, setConfirming] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(confirmRef, confirming);
   const [failure, setFailure] = useState<{ count: number; failed: CommitFailure[]; error: string | null } | null>(null);
   const popRef = useRef<HTMLDivElement>(null);
   // Anchor to the toolbar Cleanup button's live position instead of a
@@ -229,7 +232,7 @@ export function CleanupQueuePopover({
 
       {confirming && (
         <div className="db-scrim" role="dialog" aria-modal="true">
-          <div className="db-dialog">
+          <div className="db-dialog" ref={confirmRef}>
             <h3>Move {items.length.toLocaleString()} item{items.length === 1 ? "" : "s"} to the {BIN_NAME}?</h3>
             <p>
               {items.length.toLocaleString()} item{items.length === 1 ? "" : "s"} · {bytes(total)} of data.{" "}
