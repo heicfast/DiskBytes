@@ -241,6 +241,10 @@ export function buildLayout(
 ): { meta: Record<string, unknown>; cells: MockCell[] } {
   const now = Math.floor(Date.now() / 1000);
   const cells: MockCell[] = [];
+  // Mind-map visibility culling flags truncation (Rust parity — the
+  // footer's "(truncated)" hint must appear in dev exactly as in
+  // production).
+  let mindmapCulled = false;
   const root = tree.nodes[rootId];
   const total = root.onDisk || root.logical || 1;
   const kids = childrenSorted(tree, rootId);
@@ -574,8 +578,11 @@ export function buildLayout(
             cap = Math.min(cap, Math.max(levelR - 14 - 2, 6));
           }
           const r = Math.max(Math.sqrt(k.v / rootTotal) * cap, MIN_R);
-          // Visibility floor: sub-2.5px dots are invisible noise.
+          // Visibility floor: sub-2.5px dots are invisible noise. The
+          // cull flags truncated like the Rust engine (the footer's
+          // "(truncated)" hint stays honest in dev too).
           if (r < 2.5) {
+            mindmapCulled = true;
             cursor += span;
             continue;
           }
@@ -619,7 +626,7 @@ export function buildLayout(
     }
   }
 
-  const truncated = cells.length > MAX_CELLS;
+  const truncated = cells.length > MAX_CELLS || mindmapCulled;
   const finalCells = truncated ? cells.slice(0, MAX_CELLS) : cells;
   // Legend groups mirror the family level (children of the effective
   // branch root) so the chips match the colors on the canvas.
