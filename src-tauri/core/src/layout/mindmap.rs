@@ -16,6 +16,8 @@ use crate::scan::node::Tree;
 const MIN_R: f32 = 1.5;
 /// Base dot radius at the root's children (scales with viewport).
 const DOT_BASE: f32 = 26.0;
+/// Root hub dot radius (label-gate eligible: the JS names the root).
+const ROOT_DOT_R: f32 = 14.0;
 /// Alpha for top-level dots — the root chain plus the effective
 /// top-level branches: solid, matching the reference's bold branch dots.
 const ALPHA_TOP: u32 = 0xFF;
@@ -65,7 +67,7 @@ pub fn mindmap(
         pack_rgba(0x8E8E93),
         cx,
         cy,
-        14.0,
+        ROOT_DOT_R,
         cx,
         cy,
     ));
@@ -78,6 +80,9 @@ pub fn mindmap(
             r_max,
             1,
             depth,
+            total as f32,
+            -std::f32::consts::FRAC_PI_2,
+            -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU,
             color,
             now,
             &mut cells,
@@ -106,9 +111,15 @@ pub fn mindmap(
     })
 }
 
-/// Place the children of `node` on the ring at radius `ring_r`, angular
-/// spans ∝ weights, then recurse within each span. `top_index` is the
-/// inherited by-folder family; `branch_root`'s children re-assign it.
+/// Place the children of `node` on the ring at radius `ring_r`, within
+/// the inherited angular sector `[a0, a1)` — spans ∝ weights, and every
+/// descendant stays inside its ancestor's wedge (children used to start
+/// at 12 o'clock regardless of the parent's direction, letting deep
+/// dots cross back over the root hub). `top_index` is the inherited
+/// by-folder family; `branch_root`'s children re-assign it. Dot radii ∝
+/// sqrt(share of the ROOT total) — share-of-parent let a 99 %-of-parent
+/// child of a small branch render 4× its parent's size, floating over
+/// the root hub (dwarfed hierarchy inversions).
 #[allow(clippy::too_many_arguments)]
 fn layout_branches(
     tree: &Tree,
@@ -118,6 +129,9 @@ fn layout_branches(
     ring_r: f32,
     depth_here: u32,
     depth_left: u32,
+    root_total: f32,
+    a0: f32,
+    a1: f32,
     color: ColorMode,
     now: i64,
     cells: &mut Vec<Cell>,
@@ -150,7 +164,7 @@ fn layout_branches(
     let collapsed = sizeable == 1;
     let step_r = ring_r / depth_left as f32; // per-level radius step
     let level_r = ring_r - step_r * (depth_left as f32 - 1.0);
-    let mut cursor = -std::f32::consts::FRAC_PI_2; // start at 12 o'clock
+    let mut cursor = a0; // start at the sector's leading edge
     for (i, &id) in children.iter().enumerate() {
         if cells.len() >= MAX_CELLS {
             *truncated = true;
@@ -160,7 +174,7 @@ fn layout_branches(
         if c.is_removed() || c.on_disk == 0 {
             continue;
         }
-        let span = c.on_disk as f32 / total as f32 * std::f32::consts::TAU;
+        let span = c.on_disk as f32 / total as f32 * (a1 - a0);
         let mid = cursor + span / 2.0;
         let x = if collapsed {
             cx
@@ -172,13 +186,18 @@ fn layout_branches(
         } else {
             cy + level_r * mid.sin()
         };
-        // Dot radius ∝ sqrt(share of parent) — area ∝ bytes share. The
-        // cap scales with the ring step (≈ r_max/depth): an absolute
-        // 26 px cap on a small canvas (21 px steps) blobbed adjacent
-        // levels into an amorphous mass; large canvases are unchanged.
-        let share = c.on_disk as f32 / total as f32;
-        let cap = (step_r * 0.8).clamp(10.0, DOT_BASE);
-        let r = (cap * share.sqrt()).max(MIN_R);
+        // Dot radius: see the signature note — share of the ROOT keeps
+        // every dot's area comparable across the map and monotone down
+        // every chain. The cap scales with the ring step (≈ r_max/depth)
+        // so small canvases don't blob adjacent levels together; ring-1
+        // dots also clear the root hub (largest child vs hub overlap).
+        let mut cap = (step_r * 0.8).clamp(10.0, DOT_BASE);
+        if depth_here == 1 {
+            cap = cap.min((level_r - ROOT_DOT_R - 2.0).max(6.0));
+        }
+        // Radius ∝ sqrt(share of the ROOT) — area comparable across the
+        // whole map and monotone along every chain (child ≤ parent).
+        let r = (cap * (c.on_disk as f32 / root_total).sqrt()).max(MIN_R);
         // Visibility floor: sub-2.5 px dots are invisible specks that
         // only add overplotting noise (VLM: "too many micro-dots").
         // Culling sets `truncated` so the UI's "showing top N" hint
@@ -222,6 +241,9 @@ fn layout_branches(
                 if collapsed { ring_r } else { ring_r - step_r },
                 depth_here + 1,
                 depth_left - 1,
+                root_total,
+                cursor,
+                cursor + span,
                 color,
                 now,
                 cells,
@@ -388,23 +410,28 @@ mod tests {
         assert!(nested.iter().all(|c| c.rgba & 0xFF == ALPHA_NESTED));
     }
 
-    /// "This PC" → "C:" → two folders, one holding a nested home dir
-    /// with files — the shape that the pre-fix ring decay collapsed.
+    /// "This PC" → "C:" → three folders, one holding a nested home
+    /// dir with files — the shape that the pre-fix ring decay collapsed.
     fn build_deep_chain() -> Tree {
         let mut t = Tree::new(1);
         t.add_root_path(0, "This PC");
         t.append_batch(0, vec![dir("C:")]); // 1
-        t.append_batch(1, vec![dir("Users"), dir("Win")]); // 2, 3
-        t.append_batch(2, vec![dir("me")]); // 4
+        t.append_batch(1, vec![dir("Users"), dir("Win"), dir("Tools")]); // 2, 3, 4
+        t.append_batch(2, vec![dir("me")]); // 5
         t.append_batch(
-            4,
+            5,
             vec![
                 file("a.bin", 100, 100, 1),
                 file("b.bin", 50, 50, 1),
                 file("c.bin", 25, 25, 1),
-            ], // 5..7
+            ], // 6..8
         );
-        t.append_batch(3, vec![file("w.bin", 200, 200, 1)]); // 8
+        t.append_batch(3, vec![file("w.bin", 200, 200, 1)]); // 9
+                                                             // Tools: a SMALL branch (20/395) whose single child holds ~all
+                                                             // of it — the share-of-parent radius dwarfed the parent (child
+                                                             // rendered 4× the parent's dot, floating over the root hub).
+        t.append_batch(4, vec![dir("kit")]); // 10
+        t.append_batch(10, vec![file("k.bin", 19, 19, 1)]); // 11
         rollup::finalize(&mut t);
         t
     }
@@ -462,5 +489,45 @@ mod tests {
             reach >= r_max * 0.4,
             "map must span the canvas (reach={reach}, r_max={r_max})"
         );
+        // Share-of-ROOT radius: no child dot may exceed its parent's
+        // dot — the pre-fix share-of-parent let Tools' dominant child
+        // "kit" (95% of Tools, but Tools is 5% of the disk) render at
+        // ~26 px against Tools' ~6 px, floating over the root hub.
+        let by_id: std::collections::HashMap<u32, f32> =
+            buf.cells.iter().map(|c| (c.id, c.g[2])).collect();
+        let tools_r = by_id[&4];
+        let kit_r = by_id[&10];
+        assert!(
+            kit_r <= tools_r + 0.01,
+            "child dot (kit {kit_r}px) must not exceed its parent (Tools {tools_r}px)"
+        );
+        let users_r = by_id[&2];
+        let me_r = by_id[&5];
+        assert!(
+            me_r <= users_r + 0.01,
+            "collapsed chain dot (me {me_r}px) must not exceed its parent (Users {users_r}px)"
+        );
+        // Hub clearance: with sector-inheriting recursion, no branching
+        // dot may cross back over the root hub (pre-fix: deep dots
+        // landed 7 px from center, on top of the hub, because children
+        // always started at 12 o'clock instead of inside the parent's
+        // wedge). Collapsed chain dots sit ON their parent by design.
+        for c in &buf.cells {
+            if c.depth == 0 || (c.flags & 0b111) != crate::layout::cell_kind::DOT {
+                continue;
+            }
+            let from_parent = ((c.g[0] - c.g[3]).powi(2) + (c.g[1] - c.g[4]).powi(2)).sqrt();
+            if from_parent < 1.0 {
+                continue; // collapsed chain dot
+            }
+            let from_center = ((c.g[0] - cx).powi(2) + (c.g[1] - cy).powi(2)).sqrt();
+            assert!(
+                from_center >= ROOT_DOT_R + c.g[2] - 1.0,
+                "dot at depth {} crosses the root hub (center-dist {:.1}, r {:.1})",
+                c.depth,
+                from_center,
+                c.g[2]
+            );
+        }
     }
 }

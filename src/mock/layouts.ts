@@ -539,6 +539,9 @@ export function buildLayout(
         ringR: number,
         depthHere: number,
         depthLeft: number,
+        rootTotal: number,
+        a0: number,
+        a1: number,
         topIndex: number,
       ): void => {
         if (depthLeft === 0 || ringR <= 4) return;
@@ -551,20 +554,26 @@ export function buildLayout(
         const collapsed = children.length === 1;
         const stepR = ringR / depthLeft; // per-level radius step
         const levelR = ringR - stepR * (depthLeft - 1);
-        let cursor = -Math.PI / 2; // start at 12 o'clock
+        let cursor = a0; // start at the sector's leading edge
         for (let i = 0; i < children.length; i++) {
           if (cells.length >= MAX_CELLS) return;
           const k = children[i];
           const kn = tree.nodes[k.node];
           if (kn.onDisk === 0) continue;
-          const span = (k.v / sum) * Math.PI * 2;
+          const span = (k.v / sum) * (a1 - a0);
           const mid = cursor + span / 2;
           const x = collapsed ? px : px + levelR * Math.cos(mid);
           const y = collapsed ? py : py + levelR * Math.sin(mid);
-          // Dot radius ∝ sqrt(share of parent) — area ∝ bytes share.
-          // Cap scales with the ring step (blob fix, mirrors Rust).
-          const cap = Math.min(Math.max(stepR * 0.8, 10), DOT_BASE);
-          const r = Math.max(Math.sqrt(k.v / sum) * cap, MIN_R);
+          // Dot radius ∝ sqrt(share of the ROOT) — share-of-parent let a
+          // 99%-of-parent child of a small branch render 4× its parent
+          // (dwarfed hierarchy inversions over the root hub). Share of
+          // root keeps areas comparable and monotone down every chain.
+          // Ring-1 dots also clear the root hub (mirrors Rust).
+          let cap = Math.min(Math.max(stepR * 0.8, 10), DOT_BASE);
+          if (depthHere === 1) {
+            cap = Math.min(cap, Math.max(levelR - 14 - 2, 6));
+          }
+          const r = Math.max(Math.sqrt(k.v / rootTotal) * cap, MIN_R);
           // Visibility floor: sub-2.5px dots are invisible noise.
           if (r < 2.5) {
             cursor += span;
@@ -597,13 +606,16 @@ export function buildLayout(
               collapsed ? ringR : ringR - stepR,
               depthHere + 1,
               depthLeft - 1,
+              rootTotal,
+              cursor,
+              cursor + span,
               famIdx,
             );
           }
           cursor += span;
         }
       };
-      layoutBranches(rootId, cx, cy, rMax, 1, depth, 0);
+      layoutBranches(rootId, cx, cy, rMax, 1, depth, total, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2, 0);
     }
   }
 
