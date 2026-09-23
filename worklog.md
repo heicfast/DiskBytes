@@ -443,3 +443,109 @@ Stage Summary:
 - Round 17 pushed and fully verified green end-to-end (3 workflows + 34-frame tour + dark-mode captures)
 - The tour harness now samples both themes reliably; the audit triage protocol (pixel/DOM verify before acting) handled all 3 frame FAILs as artifacts
 - Next batch: view-mode swap crossfade (eliminate the 120 ms blank), remaining Rust command review (monitor/snapshots/applications/layout), keyboard-nav sweep, focus states, then wipe-and-respawn 20 todos per protocol
+
+---
+Task ID: 19
+Agent: main (Super Z)
+Task: Wave 6 (session 4 resume) — N12 mind-map parity port exposed a production engine bug; full mind-map overhaul (engine + mock + CanvasViz labels)
+
+Work Log:
+- RESUME: workspace intact; unpushed UUID commit = focus-trap wiring (useFocusTrap into 4 modals + queue/uninstall dialogs, from the pre-stop N6-N8 work); re-read worklog + GAP-ANALYSIS + DESIGN-REFERENCE (2 passes per protocol)
+- N12 started as mock↔Rust parity port of mindmap.rs; the faithful port reproduced a PRODUCTION geometry bug the old heuristic mock had masked:
+  1. RING DECAY: recursion passed step_r as child ring_r instead of ring_r-step_r → at default depth 7 the whole map collapsed into a ~60px concentric blob; levels 4+ never rendered (ring_r<=4 guard). Fixed both sides; deepest ring now sits at r_max as the docs always claimed
+  2. 6-O'CLOCK HANG: single-sizeable-child nodes render the child at exactly 6 o'clock (full-TAU span mid) → entire map hung below center at single-drive roots (the recurring VLM "crammed lower-central" complaint across 4 audits — now explained). Fixed with single-child collapse: chain nodes stack on the parent, ring budget passes through
+  3. ABSOLUTE DOT CAP: 26px cap on small canvases (21px steps) blobbed levels; cap now clamp(step*0.8, 10, 26)
+  4. MICRO-DOT NOISE: 830/1493 dots were sub-2.5px specks; visibility floor + honest truncated flag
+  5. ROOT HUB: root dot 12→14px (label-gate eligible) — map anchored by named hub
+- CANVASVIZ LABELS: engine docs promised "biggest-first, skipping collisions" — the inline draw never skipped anything (label word-clouds at dense levels). Implemented the deferred collision pass (biggest-first, rect-skip, haloed text); rewrote anchoring to absolute left edges (left-side labels drew right-anchored from the wrong x — mirrored over their own dots, the WinSxX-on-hub overlap)
+- VERIFICATION: tsx geometry dumps (145→661 cells, exact 45px ring steps), center-of-mass balance check (437,293 vs center 409,283 — was hanging low), VLM grades 4.0→4.5→5.0→6.5→7.5 across 5 iterations, final deterministic pixel audit: 22 labels, 0 glyph-box overlaps, 0 pairs <2px (scripts/label_overlap_check.py — VLM's residual "Installer/JetBrains overlap" claim triaged as halo-touching misread)
+- FALSE ALARM triaged: "no Rust constructor sets DIR_BIT → dblclick drill dead in production" — WRONG: app crate layout.rs runs a post-pass OR-ing DIR_BIT onto every dir cell in ALL modes (read layout.rs:231-239 before "fixing")
+- VLM systematic biases documented: (1) "70-80% empty canvas" — circle-in-landscape flanks (pixel: 73% vertical fill is correct); (2) captured at 1280x577 default viewport the canvas was BELOW THE FOLD — always set viewport 1440x860 (app default) before grading; (3) "labels overlap" degrades to "labels near" at zoom — always pixel-verify with label_overlap_check.py
+- Focus-trap work (pre-stop) landed in this commit: useFocusTrap hook wired into LicenseDialog, PreviewOverlay, ApplicationsView uninstall confirm, CleanupQueuePopover confirm, QuickWins menu (Esc parity)
+
+Stage Summary:
+- Round 18 batch 2 pushed (2b11725): mind-map overhaul + focus traps; all gates green (tsc 0, vitest 39/39, build OK, cargo 140/140, clippy clean, fmt clean)
+- Mind-map went from worst-graded mode to 7.5/10 with textbook radial geometry, both engines in exact parity
+- New tools: scripts/vlm.py (robust VLM helper), scripts/label_overlap_check.py (deterministic label audit), scripts/dump_mindmap.ts (geometry dump)
+- Next: CI verification of 2b11725, then continue N-batch: bubbles/sunburst VLM re-grade at correct viewport (grades were taken at 577px height — suspect all mode grades suffered), remaining polish todos
+
+---
+Task ID: 20
+Agent: main (Super Z)
+Task: Wave 6 (cont.) — bubbles overhaul + full mode sweep at correct viewport + CI hotfix
+
+Work Log:
+- MODE SWEEP at the CORRECT 1440×860 viewport (all prior mode grades suffered the clipped 577px default canvas — viewport must be set before any grading): Treemap 7.5 (truncation=designed, monochrome=Users dominance), Sunburst PASS all zoom checks, Flame rows flush + taper=data truth, Bubbles 4/10, Mind Map 4/10 (both pre-overhaul)
+- BUBBLES FULL-DEPTH PARITY: the mock rendered only 2 levels — every depth-3+ folder was a HOLLOW circle in dev while production showed children (Users rendered empty at root). Full port of core/src/layout/bubbles.rs: recursive build_bubble+emit, ring-pack + bisection fill-fit, alpha tiers at branch level, family inheritance in placement order, PAD/MIN_R/root_r exactly as core. 7 → 264 circles, 98.9% rim fill
+- BUBBLES LABEL SYSTEM: (1) deferred biggest-first collision pass — tangent mid bubbles' centered labels collided across bubbles (VLM merged "Program Files"+"JetBrains" into "Pro Jet..."); deterministic audit: 27 labels, 0 glyph overlaps; (2) two-line split at natural break points (space/hyphen/underscore/camelCase, balanced) before truncation — "Temp Ca..." → "Temp"/"Cache"; (3) adaptive font 9.5→8.5px fallback; (4) label gate 12→17 (r=12 rendered "D..."/"P..." garbage — hover-only below 17); (5) font-tracking fix (8.5px retry could draw at 9.5)
+- VLM grade trajectory bubbles: 4.0 → 6.5 → 8.5/10 "production-ready, high-fidelity" (final "defect" triaged: "129 GB over micro-dots" = center-label-over-geometry, by design)
+- VLM misreads triaged this wave: "Users bubble larger than C: container" (zoom refuted), "loose packing/gaps" (98.9% extent + Rust bisection tests = mathematically tangent), "dark grey low contrast" (ON_PASTEL 12:1), "Virt capt..." (two adjacent labels merged — the collision pass resolved the REAL underlying issue)
+- CI HOTFIX (2b11725 failed clippy): new collapsible_str_replace lint on the batch-1 snapshot id sanitization — collapsed to .replace(['\\','/'], "-"). App crate only clippy-checks on Windows CI (Linux cannot compile tauri app crate — no sudo for GTK); core crate clean locally
+
+Stage Summary:
+- 3bc9e56 pushed (bubbles overhaul + clippy hotfix; ec80815 CI auto-cancelled by the hotfix push — standard concurrency, all changes included)
+- All 6 canvas modes now verified at the correct viewport with real fixes where real issues existed: Treemap ✓ Sunburst ✓ Flame ✓ Bubbles 8.5 ✓ Mind Map 7.5 ✓ Age Map 9 ✓
+- The two worst modes (bubbles, mind-map) both got engine-level overhauls this wave with exact Rust↔mock parity
+- Next: CI verify 3bc9e56, dark-theme re-verification of overhauled modes, then remaining N-batch todos / batch 3 spawn
+
+---
+Task ID: 21
+Agent: main (Super Z)
+Task: Wave 6 (cont.) — mind-map radial-tree completion: sector inheritance + share-of-root sizing + hub clearance
+
+Work Log:
+- LIVE HIT-TEST exposed 2 more engine defects the geometry dump confirmed:
+  1. CENTER-CROSSING: children always started at 12 o'clock (cursor=-PI/2) regardless of the parent's direction — deep dots crossed back over the root hub (avd 7px from center ON the hub; dblclick on the C: hub drilled into JetBrains instead). Fixed with [a0,a1) sector inheritance through the recursion: children split the PARENT's sector, every descendant stays in its ancestor's wedge (the sunburst principle applied to dot positions)
+  2. HIERARCHY INVERSION: dot radius was sqrt(share of PARENT) — a 99%-of-parent child of a 5% branch (JetBrains under Program Files, kit under Tools) rendered 4× its parent's size, floating disconnected near the hub. Fixed: sqrt(share of ROOT) — areas comparable across the map, monotone down every chain (child ≤ parent always); collapsed chains render as the same dot as their parent
+  3. HUB CLEARANCE: ring-1 cap ≤ level_r - ROOT_DOT_R - 2 (largest child no longer touches the hub; ROOT_DOT_R=14 const shared by hub + cap)
+- Overview density: ~40 meaningful dots on the mock 129GB tree (sub-0.9%-of-root culls at the 2.5px floor; the 661-dot version was 94% invisible noise). VLM verdict: "signal over noise; any denser would require zooming, any sparser would lose detail"
+- VLM verification of the final state: sector adherence 8/10 ("tree-ring effect where depth = distance from center"), NO hierarchy inversion (explicit pass), NO hub overlap (pass), labels 7 boxes 0 overlaps (deterministic check)
+- Regression coverage: deep-levels test now asserts hub clearance (no branching dot within ROOT_DOT_R+r of center), child ≤ parent radius (Tools/kit + Users/me pairs), and the prior ring-step + depth-4 + span assertions — 140/140
+- Committed 34b8c18 and pushed (includes clippy hotfix 3bc9e56 lineage)
+
+Stage Summary:
+- Mind-map is now a textbook radial tree: sector-contained, share-of-root proportional, hub-anchored, collapse-chained, collision-labeled — verified live (dblclick hub → drills C:), deterministically (geometry dumps), and by VLM
+- 3 engine-level bugs found via a single live dblclick test — the value of interaction testing beyond static captures
+- Next: CI verify 34b8c18, remaining verification todos (abbreviate toggle, hover chip, mode-swap after CanvasViz changes), batch 3 spawn
+
+---
+Task ID: 22
+Agent: main (Super Z)
+Task: Wave 7 (session 4 cont.) — Batch 3: sunburst ZERO-LABEL regression + folder-legend production gap + full verification sweep
+
+Work Log:
+- FOLDER LEGEND PRODUCTION GAP: all five Rust engines return empty meta.groups in by-folder mode (only regroup by-type/by-age variants fill them) — the bottom-of-canvas legend chips existed ONLY in the dev mock (VLM praised them in every audit; production never rendered them). New core folder_legend() (branch-root children, size-desc, family base colors, SYNTH_BASE ids) wired into compute_layout for every by-folder layout; 141/141 tests with new regression
+- SUNBURST ZERO-LABEL REGRESSION (found via drilled-view audit): labelable() returned blanket false for sunburst ("labels drawn from arc math") but the arc label path needs names.get(id) — the names map was EMPTY: NO arc ever rendered a label and the center disc lost its root name. Every prior "sunburst labels fine" audit passed VACUOUSLY (no labels = no overlaps). Rebuilt DaisyDisk-style: radial spokes primary (budget = RING WIDTH — the old code clipped radial text at the ARC LENGTH, running wide-arc labels across neighboring rings; angular room gate span*(r0+5)>11 keeps neighbor spokes separated), tangential secondary for wide-thin arcs, left-half flip; labelable prefetches with matching gates
+- Sunburst verification: 2x VLM — major arcs labeled, no upside-down text (explicit pass); 3x pixel audit of flagged "collisions" — NO glyph intersections (10-20px gaps), NO ring-boundary crossings (full-page VLM claims triaged as scale false-positives, consistent with its bias)
+- DEPTH SLIDER GAP: DEPTH_MODES excluded Mind Map + Bubbles — both are depth-driven engines (the exclusion predates their full-depth ports). Slider now available in both; verified live (depth 3/10 respond)
+- Truncated-flag mock parity: mind-map visibility culling now flags truncated like Rust ("39 cells (truncated)" appears in dev)
+- Age bucket boundary parity: mock days<=bound vs core age<bound — exactly-7/30/91/365/730-day-old files landed one bucket apart
+- VERIFICATION SWEEP (all live): context menu on canvas ✓; search filter spec-compliant (M4.15 lists only — canvas non-response is by design); responsive 1280 after toolbar change ✓ (no overflow, wraps cleanly); perf at depth 10 — all 5 engines ≤6.5ms on the mock tree; folders-mode drill ✓ (root crumb visible — round-17 fix); List + TopSizes drilled ✓; preview overlay ✓ (fallback icon, Esc closes); queue popover ✓ (anchored, elevated, stage→clear flow); Duplicates/Monitor/Snapshots/Applications tabs ✓ (empty states clean); by-type/by-age color modes ✓ in sunburst + bubbles; theme crossfade captures taken (VLM rate-limited — pending)
+- vizUi dead-field suspicion (b3-3): FALSE ALARM — store is clean (depth field + setDepth correct; earlier reading was a display artifact)
+
+Stage Summary:
+- Two more production-only bugs eliminated this wave (folder legend, sunburst labels) — both invisible to dev-mode testing because the MOCK had them right; the mock↔Rust parity discipline keeps paying off in both directions
+- Sunburst now renders its full DaisyDisk-style label system; legend chips now render in production
+- Commits: 5944fa5 (folder_legend) + a696070 (sunburst labels) + 784c8a0 (truncated parity) + age boundary (this push) — 784c8a0 macOS + UI Screenshots already green, CI finishing
+- Next: VLM cooldown retry for theme check, CI verify latest, worklog wave-8, batch 4 spawn (deeper polish + any CI frame audit findings)
+
+---
+Task ID: 23
+Agent: main (Super Z)
+Task: Wave 7 (cont.) — Batch 3 completion: production CI tour audit of all four fixes
+
+Work Log:
+- Downloaded the 784c8a0 UI Screenshots tour (34 frames, all green workflow) — the authoritative production verification
+- Frame mapping (tour = MODES order): 00 Folders, 01 Treemap, 02 Sunburst (coral-center signature), 03 Flame, 04 Bubbles, 05 Mind Map (gray-hub signature), 06 Top Sizes, 07 Age Map, 08 List, 09-11 color modes, 12-14 dark (3x dwell), 15+ light/tabs/license/queue
+- PRODUCTION VERIFICATION (real Windows build):
+  * Sunburst (step-02): radial spoke labels YES + center name AND size YES + legend chips YES — the zero-label regression and folder-legend gap both fixed in production
+  * Bubbles (step-04): 3+ levels nesting YES (full-depth port), zero garbage labels, two-line split labels visible ("DiskBytesTest/16.3 GB", "Games/2.00 GB"), legend chips YES
+  * Mind Map (step-05): gray hub + sector branches + legend present (VLM misidentified the mode as bubbles — gray-hub pixel signature + tour order confirm mind-map; the "loose pack" reading is the collapsed-chain hub + thin links below capture resolution)
+  * Dark theme (step-12): all controls visible, by-age treemap + white labels legible — PASS
+- VLM triage: step-05 mode misidentification (bubbles vs mind-map) — resolved deterministically via tour order + pixel signature; "child larger than parent" in bubbles re-confirmed as the thin parent-ring misread (geometry: children r = sqrt(share)*(R-3) < R mathematically)
+
+Stage Summary:
+- Batch 3 COMPLETE: all 20 todos done (2 production bugs found+fixed: folder legend, sunburst labels; 1 depth-slider UX gap; 2 parity fixes: truncated flag, age boundary; full live verification sweep of every mode/tab/interaction)
+- 784c8a0 all 3 workflows GREEN with all fixes verified in the production tour
+- 5173b76 (age boundary parity) CI in flight; evidence committed
+- Session totals so far: rounds 18 batch 1+2+3 — mind-map + bubbles engine overhauls, sunburst label system rebuild, legend production fix, focus traps, ~10 engine/canvas bugs fixed at root cause, all with Rust+mock parity and deterministic verification
