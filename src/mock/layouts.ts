@@ -39,12 +39,14 @@ function shade(hex: number, f: number): number {
 }
 
 function ageBucket(modified: number, now: number): number {
+  // `<` boundaries mirror core age::bucket_of exactly (a file exactly
+  // 7 days old lands in bucket 1, not 0).
   const days = (now - modified) / 86400;
-  if (days <= 7) return 0;
-  if (days <= 30) return 1;
-  if (days <= 91) return 2;
-  if (days <= 365) return 3;
-  if (days <= 730) return 4;
+  if (days < 7) return 0;
+  if (days < 30) return 1;
+  if (days < 91) return 2;
+  if (days < 365) return 3;
+  if (days < 730) return 4;
   return 5;
 }
 
