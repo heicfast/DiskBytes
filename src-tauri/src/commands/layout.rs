@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 use diskbytes_core::layout::regroup::{self, Regrouped};
 use diskbytes_core::layout::{
-    bubbles, flame, groups, mindmap, sunburst, treemap, ColorMode, LayoutBuffer, MAX_CELLS,
+    bubbles, flame, folder_legend, groups, mindmap, sunburst, treemap, ColorMode, LayoutBuffer,
+    MAX_CELLS,
 };
 use diskbytes_core::scan::node::Tree;
 use parking_lot::Mutex;
@@ -225,6 +226,12 @@ fn compute_layout(
         }
     };
     let mut out = out.map_err(|e| e.to_string())?;
+    // By-folder legend chips: the branch-root family level. The engines
+    // only fill meta.groups for the regroup (by-type/by-age) modes, so
+    // by-folder legends existed in the dev mock but never in production.
+    if matches!(req.color, ColorMode::ByFolder) {
+        out.meta.groups = folder_legend(tree, req.node);
+    }
     // Post-pass: mark directory cells (DIR_BIT) so the JS hover chip and
     // dblclick-open logic never need a round trip. Synthetic group ids
     // live above SYNTH_BASE and describe buckets, not nodes.

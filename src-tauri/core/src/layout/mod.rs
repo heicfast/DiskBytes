@@ -271,6 +271,34 @@ pub const fn age_bucket_color(bucket: usize) -> u32 {
     COLORS[if bucket > 5 { 5 } else { bucket }]
 }
 
+/// Legend chips for by-folder views: the effective branch root's
+/// sizeable children (the pastel family level), size-desc — the JS
+/// renders `meta.groups` as the bottom-of-canvas legend. The engines
+/// only fill groups for the regroup (by-type/by-age) modes, so
+/// by-folder legends existed in the dev mock but never in production.
+#[must_use]
+pub fn folder_legend(tree: &Tree, node: u32) -> Vec<GroupDesc> {
+    let branch_root = effective_branch_root(tree, node);
+    let mut out: Vec<GroupDesc> = Vec::new();
+    for &id in tree.children_sorted(branch_root) {
+        if out.len() >= 8 {
+            break;
+        }
+        let Some(n) = tree.node(id) else { continue };
+        if n.on_disk == 0 || n.is_removed() {
+            continue;
+        }
+        let fam = out.len();
+        out.push(GroupDesc {
+            id: crate::layout::regroup::SYNTH_BASE + fam as u32,
+            name: tree.name(id),
+            color: folder_family_color(fam, 0, 0),
+            size: n.on_disk,
+        });
+    }
+    out
+}
+
 /// Pastel families for By-folder coloring (spec §7): blue, teal, violet,
 /// amber, rose, green, sky, slate — shades vary by depth+index.
 #[must_use]
@@ -399,6 +427,54 @@ pub(crate) fn rect_visible(w: f32, h: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // folder_legend: the by-folder legend mirrors the branch-root family
+    // level (the pastel chips the JS renders under the canvas).
+    #[test]
+    fn folder_legend_lists_branch_root_children_with_family_colors() {
+        use crate::scan::node::{BatchEntry, Node, Tree};
+        use crate::scan::rollup;
+        fn dir(name: &str) -> BatchEntry {
+            let mut node = Node::new_dir();
+            node.modified = 1;
+            BatchEntry {
+                name: name.encode_utf16().collect(),
+                node,
+            }
+        }
+        fn file(name: &str, on_disk: u64) -> BatchEntry {
+            let mut node = Node::new_file();
+            node.logical = on_disk;
+            node.on_disk = on_disk;
+            node.modified = 1;
+            BatchEntry {
+                name: name.encode_utf16().collect(),
+                node,
+            }
+        }
+        // This PC -> C: -> three sized folders (the branch level).
+        let mut t = Tree::new(1);
+        t.add_root_path(0, "This PC");
+        t.append_batch(0, vec![dir("C:")]); // 1
+        t.append_batch(1, vec![dir("a"), dir("b"), dir("c")]); // 2, 3, 4
+        t.append_batch(2, vec![file("f1", 300)]);
+        t.append_batch(3, vec![file("f2", 200)]);
+        t.append_batch(4, vec![file("f3", 100)]);
+        rollup::finalize(&mut t);
+
+        let legend = folder_legend(&t, 0);
+        assert_eq!(legend.len(), 3, "branch-root children a,b,c");
+        // Size-desc order with distinct pastel family base colors.
+        assert_eq!(legend[0].name, "a");
+        assert_eq!(legend[1].name, "b");
+        assert_eq!(legend[2].name, "c");
+        assert_eq!(legend[0].size, 300);
+        assert!(legend[0].color != legend[1].color && legend[1].color != legend[2].color);
+        // Synthetic ids above SYNTH_BASE (describe buckets, not nodes).
+        assert!(legend
+            .iter()
+            .all(|g| g.id >= crate::layout::regroup::SYNTH_BASE));
+    }
 
     /// Field-wise little-endian bytes of a cell (test twin of
     /// `LayoutBuffer::cells_to_bytes`).
