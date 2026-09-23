@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) STATE: Main Explore view with \"Cleanup Queue\" modal overlaying the visualization canvas.\n(2) VERDICT: FAIL\n(3) NOTES: Text truncated in treemap labels (e.g., \"component.sto\", \"Photoshop.exe\"). Modal obscures critical viz data.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790187060,
+  "id": "20260924021057a2575e51131848a7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260924021057a2575e51131848a7",
+  "usage": {
+    "completion_tokens": 62,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2901,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2963
+  }
+}

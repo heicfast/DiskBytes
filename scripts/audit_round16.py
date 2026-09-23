@@ -9,7 +9,7 @@ import json
 import os
 import subprocess
 
-OUT = "ci-artifacts/round16-fullwindow"
+OUT = "ci-artifacts/round17"
 TOKEN_ENV = "GH_TOKEN"
 
 PROMPT = (

@@ -425,3 +425,21 @@ Stage Summary:
 - Two more production-grade bug classes eliminated: previews (config shape + URL construction) and virtual-root staging; the first CI tour with guaranteed dark-mode frames lands on 16a4ed6
 - The full frontend surface has now been line-by-line reviewed this wave; CSS color system audited (all hardcoded colors are legitimate white-on-fill/dark-scoped/mask semantics)
 - Next: round-17 CI frame audit (dark-mode verification), Rust commands deeper pass, second documentation re-read, next batch of 20 todos
+
+---
+Task ID: 18
+Agent: main (Super Z)
+Task: Wave 5 (cont.) — round-17 CI verification (e7c87a7 all green) + frame audit + duplicates 3-pass algorithm fix
+
+Work Log:
+- ROUND 17 (e7c87a7 = cd5af99 + 16a4ed6 + dupes fix): CI + macOS Build + UI Screenshots ALL GREEN
+- DARK-THEME CAPTURES LANDED: frames 10-12 dark (3 consecutive = the 3× dwell working; round 16 had ZERO dark frames). Verified by VLM mode+theme ID; the initial pixel-probe false-negative was the pastel-cells-at-center trap (same class as the round-16 treemap misread)
+- 34-frame VLM audit: 31/34 PASS; 3 FAILs triaged: (1) step-03 + step-05 blank canvas = CAPTURE-TIMING artifact — the round-17 dwells de-phased the 2.6 s capture/dwell cadence so 2 frames landed inside the ~120-150 ms stage-swap window (measured locally: 4/40 samples blank during a swap; every mode renders populated in its neighboring frames; round 16 was phase-locked so it never caught a swap); (2)+(3) steps 12/33 "truncated treemap labels" = the DESIGNED clipLabel ellipsis for small cells (DaisyDisk reference behavior)
+- DUPES 3-PASS ALGORITHM FIX: the old code full-hashed EVERY same-size candidate (doc promised prefix screening); two same-size 5 GB videos = 10 GB read. Now: pass 2 hashes the 64 KiB prefix per candidate → pass 3 full-hashes ONLY prefix-match groups; ≤64 KiB files reuse the prefix digest. Large-file dupe scans drop from minutes to seconds. Core gates: 139/139 tests, clippy -D warnings clean, fmt clean (fresh rustup 1.98.1 + rustfmt/clippy components reinstalled; app crate still Linux-uncheckable — no sudo for GTK libs — Windows CI covers it)
+- VLM sweep of the polished surfaces (queue popover light+dark): PASS both, "premium elevation, excellent contrast"; two flagged items triaged numerically (Clear button 5.1:1 light / 6.4:1 dark — WCAG AA passes; "clipped Manual label" — DOM-verified no clipping)
+- Full line-by-line review now covers: every component, every tab, every store, every CSS file, lib/*, shell/*, core scan/cleanup/dupes/explore commands, tauri.conf.json schema validation (assetProtocol FsScope verified against the schema.tauri.app/config/2 JSON)
+
+Stage Summary:
+- Round 17 pushed and fully verified green end-to-end (3 workflows + 34-frame tour + dark-mode captures)
+- The tour harness now samples both themes reliably; the audit triage protocol (pixel/DOM verify before acting) handled all 3 frame FAILs as artifacts
+- Next batch: view-mode swap crossfade (eliminate the 120 ms blank), remaining Rust command review (monitor/snapshots/applications/layout), keyboard-nav sweep, focus states, then wipe-and-respawn 20 todos per protocol
