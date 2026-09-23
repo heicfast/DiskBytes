@@ -10,12 +10,15 @@ import { categoryIcon } from "../../components/Icon";
 import { getListChildren, type ListRowData } from "../../viz/exploreIpc";
 import { bytes } from "../../lib/format";
 import { Spinner } from "../../components/buttons";
+import { useArrowNav } from "../../lib/useArrowNav";
 
 interface FlatRow extends ListRowData {
   level: number;
   expanded: boolean;
   hasKids: boolean;
 }
+
+const EMPTY_ROWS: FlatRow[] = [];
 
 export interface ListModeProps {
   generation: number;
@@ -68,6 +71,29 @@ export function ListMode(props: ListModeProps) {
   });
 
   const totalItems = tree?.length ?? 0;
+  const rows = tree ?? EMPTY_ROWS;
+
+  // Explorer-parity keyboard navigation: ↑/↓ move, →/← expand and
+  // collapse, Enter opens the selected folder.
+  useArrowNav({
+    count: totalItems,
+    selectedId: props.selectedId,
+    idOf: (i) => rows[i].id,
+    onMove: (i) => {
+      props.onSelect(rows[i].id);
+      virtualizer.scrollToIndex(i, { align: "auto" });
+    },
+    onActivate: (i) => {
+      if (rows[i].isDir) props.onOpen(rows[i].id);
+    },
+    onExpand: (i, open) => {
+      const row = rows[i];
+      if (!row.hasKids || row.expanded === open) return;
+      if (open) expanded.current.add(row.id);
+      else expanded.current.delete(row.id);
+      void rebuild();
+    },
+  });
 
   if (!tree) {
     return (

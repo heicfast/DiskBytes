@@ -51,18 +51,20 @@ export function percent(fraction: number): string {
  * `"Just now"`, `"42 seconds ago"`, `"3 days ago"`, `"7 months ago"`, …
  * `modified <= 0` means unknown → `"—"`.
  */
+const ago = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+
 export function relativeAge(modified: number, now: number): string {
   if (modified <= 0) return "—";
   const delta = now - modified;
   if (delta < 0) return "Just now"; // clock skew — display-only choice
   if (delta < 10) return "Just now";
-  if (delta < 60) return `${Math.floor(delta)} seconds ago`;
-  if (delta < 3600) return `${Math.floor(delta / 60)} minutes ago`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)} hours ago`;
-  if (delta < 7 * 86400) return `${Math.floor(delta / 86400)} days ago`;
-  if (delta < 30 * 86400) return `${Math.floor(delta / (7 * 86400))} weeks ago`;
-  if (delta < 365 * 86400) return `${Math.floor(delta / (30 * 86400))} months ago`;
-  return `${Math.floor(delta / (365 * 86400))} years ago`;
+  if (delta < 60) return ago(Math.floor(delta), "second");
+  if (delta < 3600) return ago(Math.floor(delta / 60), "minute");
+  if (delta < 86400) return ago(Math.floor(delta / 3600), "hour");
+  if (delta < 7 * 86400) return ago(Math.floor(delta / 86400), "day");
+  if (delta < 30 * 86400) return ago(Math.floor(delta / (7 * 86400)), "week");
+  if (delta < 365 * 86400) return ago(Math.floor(delta / (30 * 86400)), "month");
+  return ago(Math.floor(delta / (365 * 86400)), "year");
 }
 
 /** Format an elapsed duration: `"5.5s"`, `"12s"`, `"1m 03s"`, `"2h 04m"`. */

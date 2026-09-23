@@ -12,6 +12,7 @@ import { getFolderView, type FolderViewData } from "../../viz/exploreIpc";
 import { bytes, relativeAge } from "../../lib/format";
 import { useCleanupStore } from "../../state/cleanup";
 import { Spinner } from "../../components/buttons";
+import { useArrowNav } from "../../lib/useArrowNav";
 
 const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
 
@@ -82,6 +83,27 @@ export function FoldersMode(props: FoldersModeProps) {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 162,
     overscan: 4,
+  });
+
+  // Explorer-parity grid navigation: arrows move between cards (↑/↓ by
+  // column, ←/→ by one), Enter opens. Files below the grid extend the
+  // same linear order.
+  const folderCount = data?.folders.length ?? 0;
+  useArrowNav({
+    count: folderCount,
+    selectedId: props.selectedId,
+    idOf: (i) => (data?.folders[i]?.id ?? -1),
+    grid: { columns: () => cols },
+    onMove: (i) => {
+      const f = data?.folders[i];
+      if (!f) return;
+      props.onSelect(f.id);
+      virtualizer.scrollToIndex(Math.floor(i / cols), { align: "auto" });
+    },
+    onActivate: (i) => {
+      const f = data?.folders[i];
+      if (f) props.onOpen(f.id);
+    },
   });
 
   if (stale) {

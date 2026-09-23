@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { FolderIcon, FileIcon } from "../../components/Icon";
 import { getTopSizes, type TopScopeId, type TopSizesData } from "../../viz/exploreIpc";
 import { bytes } from "../../lib/format";
+import { useArrowNav } from "../../lib/useArrowNav";
 
 const TONES = ["blue", "mint", "violet", "amber", "rose", "green", "sky", "slate"];
 
@@ -53,6 +54,19 @@ export function TopSizesMode(props: TopSizesModeProps) {
   const rows = data?.rows ?? [];
   const max = rows.length > 0 ? Math.max(...rows.map((r) => r.size), 1) : 1;
 
+  // Explorer-parity keyboard navigation: ↑/↓ move, Enter = dblclick
+  // (open folder).
+  useArrowNav({
+    count: rows.length,
+    selectedId: props.selectedId,
+    idOf: (i) => rows[i].id,
+    onMove: (i) => {
+      props.onSelect(rows[i].id);
+      document.querySelector(`[data-rank="${rows[i].rank}"]`)?.scrollIntoView({ block: "nearest" });
+    },
+    onActivate: (i) => props.onOpen(rows[i].id),
+  });
+
   return (
     <div className="db-top-sizes">
       <div className="db-top-head">
@@ -76,6 +90,7 @@ export function TopSizesMode(props: TopSizesModeProps) {
               <button
                 key={r.id}
                 type="button"
+                data-rank={r.rank}
                 className={props.selectedId === r.id ? "is-selected" : ""}
                 onClick={() => props.onSelect(r.id)}
                 onDoubleClick={() => props.onOpen(r.id)}

@@ -32,20 +32,26 @@ function nodeDetails(id: number): Record<string, unknown> {
   const agg = tree.aggregate(id);
   const parent = tree.nodes[n.parent];
   const stats = tree.stats(id);
-  const largest = n.children
+  // children_sorted parity (Rust): size-desc, then top-10.
+  const largest = [...n.children]
+    .sort((a, b) => (tree.nodes[b].onDisk || 0) - (tree.nodes[a].onDisk || 0))
     .slice(0, 10)
     .map((c) => {
       const cn = tree.nodes[c];
       return { id: c, name: cn.name, size: cn.onDisk || cn.logical, isDir: cn.isDir };
     });
   const domCat = tree.dominantCategory(id);
+  // Drive roots show as "Disk" (parity with Rust compute_details — a
+  // path-shaped X:\ check; "This PC" and real folders stay "Folder").
+  const path = fmtPath(id);
+  const isDrive = n.isDir && /^[A-Za-z]:\\?$/.test(path);
   return {
     id,
     name: n.name,
     isDir: n.isDir,
-    kind: n.isDir ? "Folder" : CATEGORY_LABELS[n.category],
+    kind: n.isDir ? (isDrive ? "Disk" : "Folder") : CATEGORY_LABELS[n.category],
     kindColor: CATEGORY_COLORS[n.isDir ? domCat : n.category],
-    path: fmtPath(id),
+    path,
     size: stats.onDisk,
     shareOfScan: stats.onDisk / (tree.nodes[lastScanRoot].onDisk || 1),
     logical: stats.logical,
@@ -456,34 +462,57 @@ const commands: Record<string, Cmd> = {
     };
   },
   top_sizes: (a) => {
+    // Parity with commands/explore.rs top_sizes: in-folder ranks are the
+    // PRE-filter positions in children_sorted order (gaps survive the
+    // filter); anywhere-scopes rank candidates 1..N then RE-RANK
+    // contiguously after the filter drops rows. Sizes are on-disk.
     const node = Number(a.node);
     const scope = String(a.scope);
     const filter = (a.filter as string | null) ?? "";
-    let rows: { id: number; name: string; parentPath: string; size: number; kind: string; isDir: boolean; share: number; color: number }[] = [];
     const st = tree.stats(node);
+    const fileCount = (n: { fileCount?: number }) => n.fileCount ?? 0;
+    const rows: { rank: number; id: number; name: string; parentPath: string; size: number; kind: string; isDir: boolean; share: number; color: number }[] = [];
     if (scope === "in-folder") {
-      rows = tree.nodes[node].children.map((c) => {
-        const cn = tree.nodes[c];
-        return {
-          id: c, name: cn.name, parentPath: fmtPath(node), size: cn.onDisk || cn.logical,
-          kind: cn.isDir ? "Folder" : CATEGORY_LABELS[cn.category], isDir: cn.isDir,
-          share: (cn.onDisk || cn.logical) / (st.onDisk || 1),
-          color: CATEGORY_COLORS[cn.isDir ? 8 : cn.category],
-        };
+      // children_sorted: on-disk desc, id asc tie-break (rollup.rs).
+      const kids = [...tree.nodes[node].children].sort(
+        (x, y) => tree.nodes[y].onDisk - tree.nodes[x].onDisk || x - y,
+      );
+      kids.forEach((c, i) => {
+        const cn = tree.nodes[c] as typeof tree.nodes[number] & { fileCount?: number };
+        if (cn.onDisk === 0 || tree.removed.has(c)) return; // push_row early-return
+        if (filter && !cn.name.toLowerCase().includes(filter.toLowerCase())) return;
+        rows.push({
+          rank: i + 1, id: c, name: cn.name, parentPath: "", size: cn.onDisk,
+          kind: cn.isDir ? `${fileCount(cn)} files` : CATEGORY_LABELS[cn.category], isDir: cn.isDir,
+          share: cn.onDisk / (st.onDisk || 1), color: cn.isDir ? CATEGORY_COLORS[8] : CATEGORY_COLORS[cn.category],
+        });
       });
-    } else if (scope === "files-anywhere") {
-      rows = tree.filesAnywhere(node, 200).map((f) => ({
-        id: f.id, name: f.node.name, parentPath: fmtPath(tree.nodes[f.id].parent), size: f.node.logical,
-        kind: CATEGORY_LABELS[f.node.category], isDir: false,
-        share: f.node.logical / (st.onDisk || 1), color: CATEGORY_COLORS[f.node.category],
-      }));
     } else {
-      rows = tree.foldersAnywhere(node, 200).map((f) => ({
-        id: f.id, name: f.node.name, parentPath: fmtPath(tree.nodes[f.id].parent), size: f.node.onDisk,
-        kind: "Folder", isDir: true, share: f.node.onDisk / (st.onDisk || 1), color: CATEGORY_COLORS[8],
-      }));
+      const wantDirs = scope === "folders-anywhere";
+      const candidates: { id: number; onDisk: number }[] = [];
+      for (const nid of tree.allDescendants(node)) {
+        const n = tree.nodes[nid];
+        if (n.isDir !== wantDirs || tree.removed.has(nid) || n.onDisk === 0) continue;
+        if (wantDirs && nid === node) continue; // the scope folder frames, never a row
+        candidates.push({ id: nid, onDisk: n.onDisk });
+      }
+      candidates.sort((x, y) => y.onDisk - x.onDisk);
+      let rank = 0;
+      for (const cand of candidates) {
+        if (rank >= 200) break; // TOP_CAP
+        const n = tree.nodes[cand.id] as typeof tree.nodes[number] & { fileCount?: number };
+        if (tree.removed.has(cand.id) || n.onDisk === 0) continue;
+        if (filter && !n.name.toLowerCase().includes(filter.toLowerCase())) continue;
+        rank += 1;
+        rows.push({
+          rank, id: cand.id, name: n.name, parentPath: fmtPath(n.parent), size: n.onDisk,
+          kind: n.isDir ? `${fileCount(n)} files` : CATEGORY_LABELS[n.category], isDir: n.isDir,
+          share: n.onDisk / (st.onDisk || 1), color: n.isDir ? CATEGORY_COLORS[8] : CATEGORY_COLORS[n.category],
+        });
+      }
+      // Re-rank after filter drops (explore.rs does this for anywhere-scopes).
+      rows.forEach((r, i) => { r.rank = i + 1; });
     }
-    if (filter) rows = rows.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()));
     return { generation: tree.generation, node, scope, rows, total: st.onDisk };
   },
   age_map: (a) => {

@@ -72,6 +72,15 @@ describe("relativeAge", () => {
     expect(relativeAge(now - 90 * 86400, now)).toBe("3 months ago");
     expect(relativeAge(now - 800 * 86400, now)).toBe("2 years ago");
   });
+  it("singular units drop the s (premium copy: never '1 days ago')", () => {
+    expect(relativeAge(now - 30, now)).toBe("30 seconds ago");
+    expect(relativeAge(now - 60, now)).toBe("1 minute ago");
+    expect(relativeAge(now - 3600, now)).toBe("1 hour ago");
+    expect(relativeAge(now - 86400, now)).toBe("1 day ago");
+    expect(relativeAge(now - 7 * 86400, now)).toBe("1 week ago");
+    expect(relativeAge(now - 30 * 86400, now)).toBe("1 month ago");
+    expect(relativeAge(now - 365 * 86400, now)).toBe("1 year ago");
+  });
 });
 
 describe("duration", () => {

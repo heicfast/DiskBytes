@@ -64,14 +64,55 @@ export function ItemContextMenu({
     const close = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    // Native-menu keyboard model: ↑/↓ cycle items, Home/End jump,
+    // Tab dismisses (menus don't tab-navigate), Esc closes. Items are
+    // real buttons — Enter/Space activate the focused one natively.
+    const items = () =>
+      [...ref.current?.querySelectorAll<HTMLButtonElement>(".db-ctx-item:not([disabled])") ?? []];
+    const focusItem = (dir: 1 | -1 | "first" | "last") => {
+      const list = items();
+      if (list.length === 0) return;
+      const active = document.activeElement as HTMLButtonElement | null;
+      const i = list.indexOf(active!);
+      let next: HTMLButtonElement;
+      if (dir === "first") next = list[0];
+      else if (dir === "last") next = list[list.length - 1];
+      else if (i < 0) next = dir === 1 ? list[0] : list[list.length - 1];
+      else next = list[(i + dir + list.length) % list.length];
+      next.focus();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        focusItem(1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusItem(-1);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        focusItem("first");
+      } else if (e.key === "End") {
+        e.preventDefault();
+        focusItem("last");
+      }
     };
     window.addEventListener("pointerdown", close, true);
-    window.addEventListener("keydown", esc);
+    window.addEventListener("keydown", onKey);
+    // Enter the menu focused (screen readers announce the item, not
+    // the page behind it).
+    requestAnimationFrame(() => items()[0]?.focus());
     return () => {
       window.removeEventListener("pointerdown", close, true);
-      window.removeEventListener("keydown", esc);
+      window.removeEventListener("keydown", onKey);
     };
   }, [target, onClose]);
 

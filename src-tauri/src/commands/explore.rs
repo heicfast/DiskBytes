@@ -273,17 +273,26 @@ pub fn compute_details(tree: &Tree, id: u32) -> NodeDetails {
             is_dir: cn.is_dir(),
         })
         .collect();
+    let path = tree.node_path(id);
+    // Drive roots read as "Disk" in the inspector (a path-shaped X:\
+    // check — "This PC" and real folders stay "Folder").
+    let is_drive = n.is_dir()
+        && path.len() <= 3
+        && path.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+        && path.as_bytes().get(1) == Some(&b':');
     NodeDetails {
         id,
         name: tree.name(id),
         is_dir: n.is_dir(),
-        kind: if n.is_dir() {
+        kind: if is_drive {
+            "Disk".to_string()
+        } else if n.is_dir() {
             "Folder".to_string()
         } else {
             cat.label().to_string()
         },
         kind_color: cat.color(),
-        path: tree.node_path(id),
+        path,
         size: n.on_disk,
         share_of_scan: if root_total > 0 {
             n.on_disk as f64 / root_total as f64
@@ -999,6 +1008,32 @@ mod tests {
         assert_eq!(d.largest[0].name, "a1.mp4");
         assert!((d.share_of_scan - 120.0 / 135.0).abs() < 1e-9);
         assert!((d.of_parent - 120.0 / 135.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn details_drive_root_reads_as_disk() {
+        // A This-PC scan: each drive node carries a root path ("C:\"),
+        // exactly like production build_root. The drive reads as "Disk"
+        // in the inspector; "This PC" and deeper folders stay "Folder".
+        let mut t = Tree::new(11);
+        t.add_root_path(0, "This PC");
+        t.set_name(0, "This PC");
+        t.append_batch(
+            0,
+            vec![dir_entry("Local Disk (C:)"), dir_entry("Data (D:)")],
+        );
+        t.append_batch(
+            1,
+            vec![dir_entry("Users"), file_entry("pagefile.sys", 5, 1)],
+        );
+        // Production parity: drives are path roots (node_path stops here).
+        t.add_root_path(1, "C:\\");
+        t.add_root_path(2, "D:\\");
+        diskbytes_core::scan::rollup::finalize(&mut t);
+        assert_eq!(compute_details(&t, 0).kind, "Folder"); // This PC stays Folder
+        assert_eq!(compute_details(&t, 1).kind, "Disk");
+        assert_eq!(compute_details(&t, 2).kind, "Disk");
+        assert_eq!(compute_details(&t, 3).kind, "Folder"); // Users stays Folder
     }
 
     #[test]

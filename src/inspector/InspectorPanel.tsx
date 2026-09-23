@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from "react";
 import {
-  CopyIcon, EyeIcon, FolderIcon, LockKeyholeIcon, SearchIcon, SparklesIcon, Trash2Icon, CheckIcon, CloudIcon,
+  CopyIcon, EyeIcon, FolderIcon, HardDriveIcon, LockKeyholeIcon, SearchIcon, SparklesIcon, Trash2Icon, CheckIcon, CloudIcon,
 } from "../components/Icon";
 import { categoryIcon } from "../components/Icon";
 import { getNodeDetails, type NodeDetailsData } from "../viz/exploreIpc";
@@ -104,7 +104,13 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const KindIcon = details.isDir ? FolderIcon : categoryIcon(details.kind);
+  // Drives carry kind "Disk" (backend) — the hard-drive glyph matches the
+  // sidebar's drive rows; folders the folder glyph; files the category.
+  const KindIcon = details.kind === "Disk"
+    ? HardDriveIcon
+    : details.isDir
+      ? FolderIcon
+      : categoryIcon(details.kind);
   const staged = contains(details.id);
   const kindColor = `#${details.kindColor.toString(16).padStart(6, "0")}`;
   // The synthetic This-PC root (multi-drive scan): node_path yields the
@@ -129,7 +135,9 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
           <h2>{details.name}</h2>
           <span className="db-kind">
             <i style={{ background: kindColor }} />
-            {details.isDir ? "Folder" : details.kind}
+            {/* Backend kind: "Disk" for drive roots, "Folder" otherwise
+                (compute_details / mock nodeDetails parity). */}
+            {details.kind}
           </span>
         </div>
       </div>

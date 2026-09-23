@@ -98,8 +98,16 @@
   color: var(--text);
   text-align: left;
 }
-.db-context .db-ctx-item:hover {
+.db-context .db-ctx-item:hover,
+.db-context .db-ctx-item:focus-visible {
   background: var(--chip);
+}
+.db-context .db-ctx-item:focus {
+  outline: none;
+}
+/* Focused + hovered simultaneously: keep the keyboard row legible. */
+.db-context .db-ctx-item:focus:not(:hover) {
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .db-context .db-ctx-item.danger {
   color: var(--used);
