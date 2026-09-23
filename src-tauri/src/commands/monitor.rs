@@ -45,7 +45,12 @@ pub fn monitor_start(app: AppHandle, state: tauri::State<'_, MonitorState>) -> R
     std::thread::Builder::new()
         .name("db-monitor".into())
         .spawn(move || sampler_loop(&app))
-        .map_err(|e| format!("monitor thread: {e}"))?;
+        .map_err(|e| {
+            // Spawn failed: release the flag, else every future
+            // monitor_start no-ops against a dead "running" state.
+            state.running.store(false, Ordering::SeqCst);
+            format!("monitor thread: {e}")
+        })?;
     Ok(())
 }
 

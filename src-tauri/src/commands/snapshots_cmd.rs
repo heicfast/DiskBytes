@@ -26,6 +26,22 @@ fn index_path() -> PathBuf {
     snapshots_dir().join("index.json")
 }
 
+/// Reject ids that could escape the snapshots directory (path
+/// separators, traversal, leading dot). Defense-in-depth: ids arrive
+/// from the frontend (our own code) but the delete command removes
+/// files — never trust a joined path blindly.
+fn ensure_safe_id(id: &str) -> Result<(), String> {
+    if id.is_empty()
+        || id.len() > 200
+        || id.contains(['/', '\\', ':'])
+        || id.contains("..")
+        || id.starts_with('.')
+    {
+        return Err("invalid snapshot id".into());
+    }
+    Ok(())
+}
+
 /// One snapshot row.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,9 +112,15 @@ pub fn take_snapshot(
         }
     }
     let taken_at = now_unix();
+    // Path-safe id: strip BOTH separators (POSIX roots carry '/', the
+    // old code only handled '\\' — a macOS snapshot write would have
+    // targeted a nonexistent subdirectory) plus the drive colon.
     let id = format!(
         "{}-{}",
-        root_path.replace('\\', "-").replace(':', ""),
+        root_path
+            .replace('\\', "-")
+            .replace('/', "-")
+            .replace(':', ""),
         taken_at
     );
     let snap = Snapshot::build(id, root_path, taken_at, pairs);
@@ -143,6 +165,8 @@ pub struct DiffView {
 /// String error when a snapshot file cannot be read.
 #[tauri::command]
 pub fn diff_snapshots(before_id: &str, after_id: &str) -> Result<DiffView, String> {
+    ensure_safe_id(before_id)?;
+    ensure_safe_id(after_id)?;
     let load = |id: &str| -> Result<Snapshot, String> {
         let p = snapshots_dir().join(format!("{id}.json"));
         snapshots::read_snapshot(&p).map_err(|e| format!("Couldn't read {id}: {e:?}"))
@@ -177,6 +201,7 @@ pub fn diff_snapshots(before_id: &str, after_id: &str) -> Result<DiffView, Strin
 /// index rewrite fails.
 #[tauri::command]
 pub fn delete_snapshot(id: &str) -> Result<(), String> {
+    ensure_safe_id(id)?;
     snapshots::delete_snapshot(&snapshots_dir(), id)
         .map_err(|e| format!("Couldn't delete the snapshot: {e:?}"))
 }

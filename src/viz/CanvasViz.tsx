@@ -86,18 +86,26 @@ export function CanvasViz(props: CanvasVizProps) {
   const hoverCell = useRef<Cell | null>(null);
   const theme = useRef<ThemeColors>(readTheme());
 
-  // ResizeObserver (debounced per settle — doc 05 §6)
+  // ResizeObserver (debounced per settle — doc 05 §6). The FIRST
+  // observation applies immediately: the debounce exists for resize
+  // CHURN, and gating the mount measurement behind it added ~120 ms of
+  // blank canvas to every mode switch (CI tour frames 03/05 caught it).
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
     let t: number | null = null;
+    let first = true;
+    const apply = (w: number, h: number) => setSize({ w: Math.floor(w), h: Math.floor(h) });
     const ro = new ResizeObserver((entries) => {
       const e = entries[0];
       if (!e) return;
+      if (first) {
+        first = false;
+        apply(e.contentRect.width, e.contentRect.height);
+        return;
+      }
       if (t !== null) window.clearTimeout(t);
-      t = window.setTimeout(() => {
-        setSize({ w: Math.floor(e.contentRect.width), h: Math.floor(e.contentRect.height) });
-      }, 120);
+      t = window.setTimeout(() => apply(e.contentRect.width, e.contentRect.height), 120);
     });
     ro.observe(el);
     return () => {
