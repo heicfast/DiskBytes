@@ -247,6 +247,15 @@ export function buildLayout(
   // By-folder families: one pastel family per branch under the effective
   // branch root (mirrors the Rust engines' effective_branch_root).
   const branchRoot = effectiveBranchRoot(tree, rootId);
+  // Depth of the branch root below the layout root (+1 → tier index):
+  // shared by bubbles (alpha tiers) and mind-map (alpha + collapse).
+  let branchLevel = 1;
+  for (let cur = branchRoot; cur !== rootId; ) {
+    const p = tree.nodes[cur]?.parent;
+    if (p === undefined || p < 0) break;
+    cur = p;
+    branchLevel += 1;
+  }
   const fam = buildFamilies(tree, rootId, branchRoot);
   const famOf = (id: number): number => fam.get(id) ?? 0;
 
@@ -353,9 +362,15 @@ export function buildLayout(
       });
     }
   } else if (mode === "bubbles") {
+    // Faithful port of core/src/layout/bubbles.rs: FULL-DEPTH recursive
+    // emission with alpha tiers + branch families (the old 2-level
+    // render left every depth-3+ folder empty in dev while production
+    // showed its children — Users rendered as a hollow circle).
     const cx = width / 2;
     const cy = height / 2;
-    const R = Math.min(width, height) / 2 - 8;
+    const rootR = Math.min(width, height) / 2 - 2; // core root_r
+    const BUBBLE_PAD = 3; // core PAD: parent rim to content
+    const BUBBLE_MIN_R = 1; // core MIN_R: sub-pixel bubbles skipped
     // Rust-engine parity: ring packing with a bisection fill-fit (the
     // old heuristic single-ring placement left loose gaps and mismatched
     // production). Children of a node with usable radius U get
@@ -370,7 +385,7 @@ export function buildLayout(
       const base = sizes.map((v) => Math.sqrt(v / total) * usable);
       const ks = base
         .map((r, i) => ({ i, x: 0, y: 0, r, base: r }))
-        .filter((k) => k.r >= 2.5);
+        .filter((k) => k.r >= BUBBLE_MIN_R);
       if (!ks.length) return [];
       const pack = (arr: typeof ks): number => {
         arr.sort((a, b) => b.r - a.r);
@@ -427,37 +442,68 @@ export function buildLayout(
       }
       return ks;
     };
-    const packed = packFit(kids.map((k) => k.v), R);
-    for (let i = 0; i < packed.length && cells.length < MAX_CELLS; i++) {
-      const p = packed[i];
-      const k = kids[p.i];
-      const x = cx + p.x;
-      const y = cy + p.y;
-      const rr = p.r;
-      const n = tree.nodes[k.node];
-      cells.push({
-        id: k.node,
-        depth: 1,
-        flags: (n.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
-        rgba: (colorFor(n, famOf(k.node), 1, colorMode, now, p.i) << 8) | 0xb4,
-        g: [x, y, rr, 0, 0],
-      });
-      if (n.isDir && depth > 1) {
-        const sub = childrenSorted(tree, k.node).slice(0, 14);
-        const subPacked = packFit(sub.map((s) => s.v), Math.max(0, rr - 3));
-        for (let sj = 0; sj < subPacked.length; sj++) {
-          const sp = subPacked[sj];
-          const sn = tree.nodes[sub[sp.i].node];
-          cells.push({
-            id: sub[sp.i].node,
-            depth: 2,
-            flags: (sn.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
-            rgba: (colorFor(sn, famOf(sub[sp.i].node), 2, colorMode, now, sj) << 8) | 0xd9,
-            g: [x + sp.x, y + sp.y, sp.r, 0, 0],
-          });
+    // Collect the bubble hierarchy to `depth` levels (core build_bubble):
+    // geometry-free — emission works top-down from the collected sizes.
+    interface Bubble {
+      id: number;
+      size: number;
+      children: Bubble[];
+    }
+    const build = (nodeId: number, depthLeft: number): Bubble => {
+      const n = tree.nodes[nodeId];
+      const children: Bubble[] = [];
+      if (depthLeft > 0 && n.isDir && n.children.length > 0) {
+        for (const k of childrenSorted(tree, nodeId)) {
+          children.push(build(k.node, depthLeft - 1));
         }
       }
-    }
+      return { id: nodeId, size: n.onDisk || n.logical || 0, children };
+    };
+    // Core emit: circle at (x,y,drawnR), then allocate + ring-pack +
+    // fill-fit children into usable = drawnR - PAD, recurse per child.
+    // Alpha tiers at the branch level mirror ALPHA_PRIMARY/ALPHA_NESTED;
+    // the by-folder family assigns at the branch root's children and is
+    // inherited below (placement order, like the Rust `i`).
+    const emitBubble = (
+      b: Bubble,
+      x: number,
+      y: number,
+      drawnR: number,
+      depthHere: number,
+      topIndex: number,
+    ): void => {
+      if (cells.length >= MAX_CELLS) return; // truncated computed post-hoc
+      if (drawnR < BUBBLE_MIN_R) return;
+      const n = tree.nodes[b.id];
+      const rgb = colorFor(n, topIndex, depthHere, colorMode, now, topIndex);
+      const alpha = depthHere <= branchLevel ? 0xb4 : 0xd9;
+      cells.push({
+        id: b.id,
+        depth: depthHere,
+        flags: (n.isDir ? DIR_BIT : 0) | KIND_CIRCLE,
+        rgba: (rgb << 8) | alpha,
+        g: [x, y, drawnR, 0, 0],
+      });
+      const usable = Math.max(drawnR - BUBBLE_PAD, 0);
+      const sum = b.children.reduce((a, c) => a + c.size, 0);
+      if (sum === 0 || usable < BUBBLE_MIN_R) return;
+      const placed = packFit(
+        b.children.map((c) => c.size),
+        usable,
+      );
+      for (let pi = 0; pi < placed.length; pi++) {
+        const p = placed[pi];
+        emitBubble(
+          b.children[p.i],
+          x + p.x,
+          y + p.y,
+          p.r,
+          depthHere + 1,
+          b.id === branchRoot ? pi : topIndex,
+        );
+      }
+    };
+    emitBubble(build(rootId, depth), cx, cy, rootR, 0, 0);
   } else if (mode === "mind-map") {
     // Faithful port of core/src/layout/mindmap.rs — the old heuristic
     // (uniform angles + uncapped sqrt(share)*rMax dots) degenerated at
@@ -473,14 +519,8 @@ export function buildLayout(
     // edge (the deepest ring sits AT r_max); floor keeps tiny windows
     // usable. Mirrors core `r_max` exactly.
     const rMax = Math.max(Math.min(width, height) / 2 - DOT_BASE - 8, 48);
-    // depth of branchRoot below the layout root (+1 → tier index).
-    let branchLevel = 1;
-    for (let cur = branchRoot; cur !== rootId; ) {
-      const p = tree.nodes[cur]?.parent;
-      if (p === undefined || p < 0) break;
-      cur = p;
-      branchLevel += 1;
-    }
+    // Depth of branchRoot below the layout root (+1 → tier index) —
+    // computed once at buildLayout entry (shared with bubbles).
     // Root dot: neutral gray, 14px (label-gate eligible — r ≥ 13 names
     // the root, anchoring the map), at center; parent link points at
     // itself.

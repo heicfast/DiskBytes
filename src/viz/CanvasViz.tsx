@@ -408,6 +408,17 @@ function drawCells(
   // first, overlapping labels dropped — the engine docs' "biggest-first,
   // skipping collisions" promise; the inline draw collided freely).
   const pendingDotLabels: { x: number; y: number; w: number; r: number; text: string }[] = [];
+  // Bubble labels defer the same way: mid bubbles cluster tangentially
+  // and their centered labels collided across bubbles (VLM merged
+  // "Program Files" + "JetBrains" into "Pro Jet..."). Bigger bubbles win.
+  const pendingCircleLabels: {
+    x: number;
+    cy: number;
+    w: number;
+    h: number;
+    r: number;
+    draw: () => void;
+  }[] = [];
 
   // mind-map: draw links first — each takes the CHILD's own family color
   // at ~45% opacity (reference: colored bezier links, not uniform gray).
@@ -539,12 +550,12 @@ function drawCells(
       // The sunburst center disc carries the dedicated white center
       // label below — skip the generic dark-ink circle label for it.
       const isSunburstCenter = mode === "sunburst" && c.id === layout.meta.node;
-      // Bubble labels: label every circle that can FIT one. VLM audits
-      // kept flagging anonymous mid-size bubbles ("Program Files",
-      // "pagefile.sys" — no identification); a 9.5px line fits from
-      // r≈12 with clipping, so gate at 12 (sunburst keeps the wide 30
-      // gate — tiny translucent nested arcs are noise).
-      const minLabelR = mode === "sunburst" ? 30 : 12;
+      // Bubble labels: label every circle that can fit one LEGIBLY.
+      // 17 — below that not even a two-line 9.5px split fits (the old
+      // r=12 gate rendered garbage like "D..."/"P..." — worse than no
+      // label; identification falls to hover). Sunburst keeps the wide
+      // 30 gate — tiny translucent nested arcs are noise.
+      const minLabelR = mode === "sunburst" ? 30 : 17;
       if (r >= minLabelR && !isSunburstCenter) {
         const name = names.get(c.id);
         if (name) {
@@ -556,13 +567,92 @@ function drawCells(
           ctx.font = `${big ? 700 : 600} ${big ? 11.5 : 9.5}px ${uiFont()}`;
           // Big bubbles get the reference's stacked treatment: name over
           // size (the u64 sizes tail) — small ones keep the single line.
+          // All bubble labels defer to the collision pass (bigger wins).
           if (big && c.size > 0) {
-            ctx.fillText(clipLabel(ctx, label, r * 1.7), x, y - 7);
-            ctx.fillStyle = ON_PASTEL_2;
+            const l1 = clipLabel(ctx, label, r * 1.7);
+            const w1 = ctx.measureText(l1).width;
             ctx.font = `600 10px ${uiFont()}`;
-            ctx.fillText(bytes(c.size), x, y + 8);
+            const sizeStr = bytes(c.size);
+            const w2 = ctx.measureText(sizeStr).width;
+            pendingCircleLabels.push({
+              x,
+              cy: y + 0.5,
+              w: Math.max(w1, w2) + 2,
+              h: 27,
+              r,
+              draw: () => {
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = ON_PASTEL;
+                ctx.font = `700 11.5px ${uiFont()}`;
+                ctx.fillText(l1, x, y - 7);
+                ctx.fillStyle = ON_PASTEL_2;
+                ctx.font = `600 10px ${uiFont()}`;
+                ctx.fillText(sizeStr, x, y + 8);
+                ctx.textAlign = "left";
+              },
+            });
           } else {
-            ctx.fillText(clipLabel(ctx, label, r * 1.6), x, y);
+            // Small bubbles: prefer a two-line split at natural break
+            // points (space / hyphen / underscore / camelCase) over
+            // truncation — "Temp Ca..." becomes "Temp" / "Cache". Falls
+            // back to adaptive font (9.5 → 8.5px) then the r×1.8 clip.
+            ctx.font = `600 9.5px ${uiFont()}`;
+            const maxW = r * 1.8;
+            let text = clipLabel(ctx, label, maxW);
+            let fontPx = 9.5;
+            let lines: string[] | null = null;
+            if (text.endsWith("…") && r >= 22) {
+              const parts = splitLabel(label);
+              if (
+                parts &&
+                ctx.measureText(parts[0]).width <= r * 1.9 &&
+                ctx.measureText(parts[1]).width <= r * 1.9
+              ) {
+                lines = [clipLabel(ctx, parts[0], r * 1.9), clipLabel(ctx, parts[1], r * 1.9)];
+              } else {
+                ctx.font = `600 8.5px ${uiFont()}`;
+                fontPx = 8.5;
+                const retry = clipLabel(ctx, label, maxW);
+                if (!retry.endsWith("…") || retry.length > text.length) text = retry;
+              }
+            }
+            if (lines) {
+              const w = Math.max(ctx.measureText(lines[0]).width, ctx.measureText(lines[1]).width);
+              pendingCircleLabels.push({
+                x,
+                cy: y + 0.5,
+                w: w + 2,
+                h: 22,
+                r,
+                draw: () => {
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillStyle = ON_PASTEL;
+                  ctx.font = `600 9.5px ${uiFont()}`;
+                  ctx.fillText(lines[0], x, y - 5);
+                  ctx.fillText(lines[1], x, y + 6);
+                  ctx.textAlign = "left";
+                },
+              });
+            } else {
+              const w = ctx.measureText(text).width;
+              pendingCircleLabels.push({
+                x,
+                cy: y,
+                w: w + 2,
+                h: 12,
+                r,
+                draw: () => {
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillStyle = ON_PASTEL;
+                  ctx.font = `600 ${fontPx}px ${uiFont()}`;
+                  ctx.fillText(text, x, y);
+                  ctx.textAlign = "left";
+                },
+              });
+            }
           }
           ctx.textAlign = "left";
         }
@@ -605,6 +695,29 @@ function drawCells(
           ctx.textAlign = "left";
         }
       }
+    }
+  }
+
+  // Bubble labels: biggest-first with rect-collision skipping —
+  // tangent mid bubbles' centered labels collided across bubbles.
+  if (pendingCircleLabels.length) {
+    pendingCircleLabels.sort((a, b) => b.r - a.r);
+    const placed: Array<[number, number, number, number]> = [];
+    const pad = 1;
+    for (const L of pendingCircleLabels) {
+      const rect: [number, number, number, number] = [
+        L.x - L.w / 2 - pad,
+        L.cy - L.h / 2 - pad,
+        L.w + pad * 2,
+        L.h + pad * 2,
+      ];
+      const collide = placed.some(
+        ([px, py, pw, ph]) =>
+          rect[0] < px + pw && rect[0] + rect[2] > px && rect[1] < py + ph && rect[1] + rect[3] > py,
+      );
+      if (collide) continue; // smaller bubble loses — hover identifies it
+      placed.push(rect);
+      L.draw();
     }
   }
 
@@ -670,6 +783,41 @@ function clipLabel(ctx: CanvasRenderingContext2D, label: string, maxW: number): 
     out = out.slice(0, -1);
   }
   return `${out}…`;
+}
+
+/**
+ * Split a label into two balanced lines at a natural break point
+ * (space / hyphen / underscore / camelCase boundary), preferring the
+ * split closest to the middle. Returns null when no break point exists
+ * or either side would be a single character.
+ */
+function splitLabel(label: string): [string, string] | null {
+  // Candidate split indices (split BEFORE the index).
+  const idx: number[] = [];
+  for (let i = 1; i < label.length; i++) {
+    const a = label[i - 1];
+    const b = label[i];
+    if (a === " " || a === "-" || a === "_") {
+      if (b !== " " && i > 1 && i < label.length) idx.push(i);
+    } else if (/[a-z0-9]/.test(a) && /[A-Z]/.test(b)) {
+      idx.push(i); // camelCase hump
+    }
+  }
+  if (!idx.length) return null;
+  const mid = label.length / 2;
+  let best = idx[0];
+  let bestD = Math.abs(idx[0] - mid);
+  for (const i of idx) {
+    const d = Math.abs(i - mid);
+    if (d < bestD) {
+      best = i;
+      bestD = d;
+    }
+  }
+  const l1 = label.slice(0, best).trimEnd();
+  const l2 = label.slice(best);
+  if (l1.length < 2 || l2.length < 2) return null;
+  return [l1, l2];
 }
 
 /** Hit-test a point against the mode's geometry. */
