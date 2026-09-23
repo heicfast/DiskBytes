@@ -325,7 +325,15 @@ function labelable(c: Cell, mode: string): boolean {
     // r≥12; mind-map dots from r≥13) so the repaint always has names.
     return c.g[2] >= 12;
   }
-  return false; // sunburst labels drawn from arc math
+  if (mode === "sunburst") {
+    // Arc labels use the same span/ring gates as the draw paths
+    // (along-ring OR radial) — the old blanket `false` left the names
+    // map EMPTY, so no arc (or the center disc's root name) ever
+    // rendered a label.
+    if (kind === CELL_KIND.ARC) return c.g[1] - c.g[0] > 0.04 && c.g[3] - c.g[2] > 13;
+    return kind === CELL_KIND.CIRCLE; // the center disc carries the root name
+  }
+  return false;
 }
 
 /** Paint the static layer. */
@@ -518,23 +526,43 @@ function drawCells(
       ctx.strokeStyle = "rgba(29,29,31,0.08)";
       ctx.lineWidth = 0.8;
       ctx.stroke();
-      // labels: along-ring when wide, radial when narrow — never upside-down
+      // Labels (DaisyDisk reference): RADIAL SPOKES primary — text runs
+      // outward along the radius from the ring's inner edge, budget =
+      // the ring WIDTH (the old code clipped radial text at the arc
+      // LENGTH, letting wide-arc labels run across neighboring rings);
+      // TANGENTIAL secondary for wide-but-thin arcs (text along the
+      // chord). Never upside-down. Angular room gate: the font height
+      // must fit the arc's chord at the label start (neighbor spokes).
       const span = a1 - a0;
       const midA = (a0 + a1) / 2;
-      if (span > 0.16 && r1 - r0 > 13) {
-        const name = names.get(c.id);
-        if (name) {
-          const label = props.abbreviateLabels ? abbreviate(name) : name;
-          const rr = (r0 + r1) / 2;
-          const flip = Math.cos(midA) < 0;
+      const ringW = r1 - r0;
+      const rrMid = (r0 + r1) / 2;
+      const name = names.get(c.id);
+      if (name) {
+        const label = props.abbreviateLabels ? abbreviate(name) : name;
+        ctx.fillStyle = ON_PASTEL;
+        ctx.font = `600 9px ${uiFont()}`;
+        ctx.textBaseline = "middle";
+        const cosMid = Math.cos(midA);
+        if (span * (r0 + 5) > 11 && ringW >= 24) {
+          // Radial spoke: from the inner edge outward, left half flips
+          // so the text always reads left-to-right.
+          const flip = cosMid < 0;
           ctx.save();
-          ctx.translate(cx + Math.cos(midA) * rr, cy + Math.sin(midA) * rr);
-          ctx.rotate(flip ? midA + Math.PI : midA);
-          ctx.fillStyle = ON_PASTEL;
-          ctx.font = "600 9px " + getComputedStyle(document.documentElement).getPropertyValue("--font-ui");
-          ctx.textBaseline = "middle";
-          const maxW = span * rr - 6;
-          ctx.fillText(clipLabel(ctx, label, maxW), flip ? -2 : 2, 0);
+          ctx.translate(cx + cosMid * (r0 + 5), cy + Math.sin(midA) * (r0 + 5));
+          ctx.rotate(midA + (flip ? Math.PI : 0));
+          ctx.textAlign = flip ? "right" : "left";
+          ctx.fillText(clipLabel(ctx, label, ringW - 10), flip ? -2 : 2, 0);
+          ctx.textAlign = "left";
+          ctx.restore();
+        } else if (span * rrMid - 6 >= 28 && ringW > 13) {
+          // Tangential: text along the chord direction at mid-radius;
+          // flip when the chord runs right-to-left (bottom half).
+          const flip = Math.sin(midA) > 0;
+          ctx.save();
+          ctx.translate(cx + cosMid * rrMid, cy + Math.sin(midA) * rrMid);
+          ctx.rotate(midA + Math.PI / 2 + (flip ? Math.PI : 0));
+          ctx.fillText(clipLabel(ctx, label, span * rrMid - 6), flip ? -2 : 2, 0);
           ctx.restore();
         }
       }
