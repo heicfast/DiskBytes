@@ -48,32 +48,38 @@ pub struct DupesResult {
     pub files: u64,
 }
 
-/// Hash a file per the spec passes: the 64 KiB prefix, then the full
-/// stream when the file exceeds it. Returns the digest (opaque to the
-/// core). `None` = unreadable (skipped honestly).
-fn hash_file(path: &std::path::Path, size: u64) -> Option<[u8; 32]> {
+/// Hash ONLY the first `PREFIX` bytes (pass 2). `None` = unreadable
+/// (skipped honestly). For files ≤ PREFIX this IS the full digest.
+fn hash_prefix(path: &std::path::Path) -> Option<[u8; 32]> {
     use std::io::Read;
     let mut f = std::fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
-    let mut remaining = if size > PREFIX { u64::MAX } else { size };
-    let mut buf = vec![0u8; CHUNK];
-    loop {
-        let cap = if remaining == u64::MAX {
-            buf.len()
-        } else {
-            (remaining.min(buf.len() as u64)) as usize
-        };
-        if cap == 0 {
-            break;
-        }
-        let n = f.read(&mut buf[..cap]).ok()?;
+    let mut buf = vec![0u8; PREFIX as usize];
+    let mut read = 0u64;
+    while read < PREFIX {
+        let n = f.read(&mut buf[..(PREFIX as usize - read as usize)]).ok()?;
         if n == 0 {
             break;
         }
         hasher.update(&buf[..n]);
-        if remaining != u64::MAX {
-            remaining = remaining.saturating_sub(n as u64);
+        read += n as u64;
+    }
+    let digest: [u8; 32] = hasher.finalize().into();
+    Some(digest)
+}
+
+/// Full-hash streaming (pass 3, 1 MiB chunks). `None` = unreadable.
+fn hash_full(path: &std::path::Path) -> Option<[u8; 32]> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; CHUNK];
+    loop {
+        let n = f.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
         }
+        hasher.update(&buf[..n]);
     }
     let digest: [u8; 32] = hasher.finalize().into();
     Some(digest)
@@ -149,24 +155,49 @@ fn compute_dupes(tree: &diskbytes_core::scan::node::Tree) -> DupesResult {
         by_size.entry(c.size).or_default().push(c);
     }
 
-    // Passes 2+3: hash + hardlink identity → HashedFile (core contract).
-    let mut hashed: Vec<HashedFile> = Vec::new();
+    // Passes 2+3 (spec §10, the REAL 3-pass): 64 KiB prefix hash per
+    // size-bucket candidate → group by (size, prefix) → FULL hash only
+    // where ≥ 2 prefixes match. The previous code full-hashed every
+    // bucket member (two same-size 5 GB videos = 10 GB read; now 128 KiB
+    // + nothing — the prefix mismatch screens them out).
+    // (size, prefix digest) → candidates sharing it.
+    let mut by_prefix: HashMap<(u64, [u8; 32]), Vec<&Candidate>> = HashMap::new();
     for (size, bucket) in &by_size {
         if bucket.len() < 2 {
             continue; // Single size = no duplicate candidates.
         }
         for c in bucket {
-            if let Some(digest) = hash_file(std::path::Path::new(&c.path), *size) {
-                let (vs, fi) = hardlink_identity(std::path::Path::new(&c.path))
-                    .unwrap_or((u64::MAX, u64::from(c.id)));
-                hashed.push(HashedFile {
-                    path: c.path.clone(),
-                    size: *size,
-                    volume_serial: vs,
-                    file_index: fi,
-                    sha256: digest,
-                });
+            if let Some(digest) = hash_prefix(std::path::Path::new(&c.path)) {
+                by_prefix.entry((*size, digest)).or_default().push(c);
             }
+        }
+    }
+
+    // Pass 3: full hash the prefix survivors only. Files ≤ PREFIX long
+    // already have their full digest from pass 2 — reuse it verbatim.
+    let mut hashed: Vec<HashedFile> = Vec::new();
+    for ((size, prefix_digest), group) in &by_prefix {
+        if group.len() < 2 {
+            continue; // Prefix mismatch — not duplicates, skip the full read.
+        }
+        for c in group {
+            let digest = if *size <= PREFIX {
+                Some(*prefix_digest)
+            } else {
+                hash_full(std::path::Path::new(&c.path))
+            };
+            let Some(sha256) = digest else {
+                continue;
+            };
+            let (vs, fi) = hardlink_identity(std::path::Path::new(&c.path))
+                .unwrap_or((u64::MAX, u64::from(c.id)));
+            hashed.push(HashedFile {
+                path: c.path.clone(),
+                size: *size,
+                volume_serial: vs,
+                file_index: fi,
+                sha256,
+            });
         }
     }
 

@@ -392,3 +392,36 @@ Stage Summary:
 - Round 16 ready: min-window floor + CI 1920×1080 captures + toast bus + dead-code cleanup
 - All gates green: tsc 0, vitest 39/39, build OK, mock-free, fmt/clippy clean
 - The CI loop is now STRONGER than ever (full-window captures); next push verifies the min-clamp + 1920 tour
+
+---
+Task ID: 17
+Agent: main (Super Z)
+Task: Wave 5 (session 3 cont.) — round-16 CI full-window audit + round-17 senior line-by-line review sweep (frontend + Rust + CSS)
+
+Work Log:
+- ROUND-16 CI (35b80362060, all green): downloaded the FIRST-EVER 1920×1080 full-window tour (26 frames — every historical tour was cropped at the 1024 runner display). VLM audit: 26/26 PASS; inspector path box + mode pictograms + queue modal verified clean in the real Windows build
+- TOUR HARNESS GAP: NO dark-theme frame was captured — the 2.6 s dark dwell fell entirely between the 2.6 s capture samples (all 26 frames light). FIXED: TourDriver theme steps dwell 3× (guarantees ≥2 samples/theme); CI frame budget 26→34
+- CRITICAL DISCOVERY (asset protocol): tauri.conf assetProtocol.scope was `{read: true, write: false}` — an INVALID FsScope shape (schema wants glob arrays) → deserialized to an EMPTY allow list → image/video/audio/pdf previews could NEVER load in production (masked by "PENDING Windows session"). FIXED: scope ["**"] (read-only GET protocol, CSP-gated). Plus PreviewOverlay.assetUrl built `asset://C:/<filename>` from the NAME only (wrong URL for every non-root file) → now resolves via __TAURI_INTERNALS__.convertFileSrc on the node's full path
+- VIRTUAL-ROOT STAGING: staging the synthetic This-PC root (node_path = the LABEL "This PC") hands the shell a nonexistent path → commit fails with a confusing alert. FIXED: inspector disables the button ("Open a drive or folder first" + explanatory tooltip); mock pathOf(0) now returns the This PC label for parity (was "C:\" — masked the guard in dev)
+- SENIOR LINE-BY-LINE REVIEW (App.tsx, TopBar, TourDriver, ExploreView, ExploreHeader, InspectorPanel, all 4 tabs, all popovers/dialogs/menus, HoverChip, PreviewOverlay, buttons, sidebar sections, scan.ts + all stores, tokens.css + 8 style files, lib/fitPath): 13 more real defects found + fixed:
+  1. Toast: enter animated but exit INSTANT → framer-motion spring in/out + margin-auto centering (translateX(-50%) centering broke under motion transforms)
+  2. Breadcrumb deep chains (>4) showed the last 3-4 crumbs with NO root-context indicator → ellipsis crumb (jump-to-root, full-path tooltip); mock get_breadcrumb now includes the scan root (Rust parity)
+  3. Queue popover anchored at hardcoded top:96 — the degrade banner shifts the topbar and detaches the popover → anchors to the live button rect (resize-tracked)
+  4. Inspector icon tones hashed the unstable node ID (folders recolored between scans) → stable path hash (djb2)
+  5. HoverChip leaked a detached React root PER HOVER (createRoot never unmounted) → lazy persistent root
+  6. Snapshot delete was a single irreversible click → two-step armed confirm (danger tint) — every other destructive action confirms
+  7. Uninstall dialog was the ONLY modal without Esc-close → parity
+  8. QuickWins context menu lacked Esc-close → parity
+  9. Duplicates rows showed the size twice (under path + right column) → deduped
+  10. Applications leftover paths joined with " · " (blunt clip, no ellipsis) → one TailPath per line
+  11. "A" abbreviate toggle rendered in List/Top Sizes but was a DEAD toggle (ListMode had a hardcoded-false stub) → scoped to canvas modes where it works
+  12. Dead code removed: ExploreView stageNode (void-suppressed), ListMode abbreviation stub, ApplicationsView no-op if, TopSizesMode hidden size-0 lock icon
+  13. MonitorView "Show top 14" rendered even when ≤14 rows → guarded
+- Elevation polish: --shadow-pop rebuilt as 3-layer (crisp 1px contact + mid + ambient) — VLM round-16 audit found modal edges blending into saturated treemap fills; verified premium live
+- Gates: tsc 0, vitest 39/39, production build OK, cargo test 139/139 (fresh rustup 1.98.1 reinstall — env reset), fmt clean
+- Commits: cd5af99 (round 17: 16 review fixes + dark-treemap enrichment + tour dwell) + 16a4ed6 (preview asset-protocol production fixes + virtual-root guard); both pushed, CI in flight (cd5af99 runs auto-cancelled by the newer push — standard concurrency, all changes in 16a4ed6)
+
+Stage Summary:
+- Two more production-grade bug classes eliminated: previews (config shape + URL construction) and virtual-root staging; the first CI tour with guaranteed dark-mode frames lands on 16a4ed6
+- The full frontend surface has now been line-by-line reviewed this wave; CSS color system audited (all hardcoded colors are legitimate white-on-fill/dark-scoped/mask semantics)
+- Next: round-17 CI frame audit (dark-mode verification), Rust commands deeper pass, second documentation re-read, next batch of 20 todos

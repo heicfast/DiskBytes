@@ -5,7 +5,7 @@
  * path for "anywhere" scopes, % of folder, size.
  */
 import { useEffect, useState } from "react";
-import { FolderIcon, FileIcon, LockKeyholeIcon } from "../../components/Icon";
+import { FolderIcon, FileIcon } from "../../components/Icon";
 import { getTopSizes, type TopScopeId, type TopSizesData } from "../../viz/exploreIpc";
 import { bytes } from "../../lib/format";
 
@@ -100,9 +100,6 @@ export function TopSizesMode(props: TopSizesModeProps) {
                 <small className="tnum">{r.isDir ? "" : r.kind}</small>
                 <em className="tnum">{(r.share * 100).toFixed(1)}%</em>
                 <b className="tnum">{bytes(r.size)}</b>
-                <span style={{ display: "none" }}>
-                  <LockKeyholeIcon size={0} />
-                </span>
               </button>
             );
           })}
