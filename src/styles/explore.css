@@ -305,8 +305,10 @@
    * placeholder width. */
   width: 70%;
   min-height: 17px;
-  font: 10.5px/1.6 var(--font-mono);
-  color: var(--text-tertiary);
+  font: 11px/1.6 var(--font-mono);
+  /* text-secondary (4.9:1): the live path is what tells the user WHAT
+   * is being scanned — tertiary (3.1:1) at this size was sub-AA. */
+  color: var(--text-secondary);
   text-align: center;
 }
 .db-state .db-state-actions {
@@ -333,19 +335,20 @@
 .db-scan-ring {
   position: absolute;
   border-radius: 50%;
-  border: 1px solid var(--divider);
-  opacity: 0.9;
+  /* --border (not --divider): the platter rings must be PERCEIVED on
+   * white — #e5e5ea at 0.6/0.35 opacity was ~1.02:1, invisible (the
+   * sweep appeared to orbit empty space). */
+  border: 1px solid var(--border);
 }
 .db-scan-ring.r1 {
   inset: 0;
+  /* 2px: the outer ring anchors the sweep track — weight, not color,
+   * keeps it perceived without competing with the coral arc. */
+  border-width: 2px;
 }
 .db-scan-ring.r2 {
   inset: 18px;
-  opacity: 0.6;
-}
-.db-scan-ring.r3 {
-  inset: 36px;
-  opacity: 0.35;
+  opacity: 0.75;
 }
 .db-scan-sweep {
   position: absolute;
@@ -466,12 +469,6 @@
   font-variant-numeric: tabular-nums;
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 6%, transparent);
 }
-.db-folder-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
-  gap: 12px;
-}
-
 /* Folder-shaped card: tab + sheen + pastel tint + hover lift */
 .db-folder-card {
   position: relative;
@@ -679,10 +676,6 @@
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--ink) 25%, transparent);
 }
 .db-file-row > svg,
-.db-file-row .db-file-glyph {
-  color: var(--file-cat, var(--text-tertiary));
-  flex: none;
-}
 .db-file-row > span {
   display: flex;
   flex-direction: column;
@@ -708,12 +701,6 @@
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
-}
-.db-file-row .db-cloud-badge {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  color: var(--text-tertiary);
 }
 .db-files-more {
   margin-top: 10px;

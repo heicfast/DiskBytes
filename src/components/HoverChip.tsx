@@ -37,6 +37,17 @@ export function formatSizeLocal(bytes: number): string {
   return `${v >= 100 || u === 0 ? Math.round(v) : v.toFixed(1)} ${units[u]}`;
 }
 
+/** Shared placement: 16/18 px offset from the pointer, clamped so the
+ * chip never leaves the viewport (both the first show and every move
+ * — the old show() placed at the RAW pointer, undoing the clamp). */
+function placeChip(el: HTMLElement, x: number, y: number): void {
+  const W = 380;
+  const left = Math.min(Math.max(12, x + 16), window.innerWidth - W - 12);
+  const top = Math.min(window.innerHeight - 70, y + 18);
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
 export const HoverChip = forwardRef<HoverChipHandle, { sizeFmt: (b: number) => string }>(function HoverChip(
   { sizeFmt },
   ref,
@@ -83,16 +94,12 @@ export const HoverChip = forwardRef<HoverChipHandle, { sizeFmt: (b: number) => s
       }
       el.style.opacity = "1";
       el.style.transform = "translateY(0)";
-      move(x, y);
+      placeChip(el, x, y);
     },
     move(x, y) {
       const el = root.current;
       if (!el || !visible.current) return;
-      const W = 380;
-      const left = Math.min(Math.max(12, x + 16), window.innerWidth - W - 12);
-      const top = Math.min(window.innerHeight - 70, y + 18);
-      el.style.left = `${left}px`;
-      el.style.top = `${top}px`;
+      placeChip(el, x, y);
     },
     hide() {
       const el = root.current;
@@ -102,13 +109,6 @@ export const HoverChip = forwardRef<HoverChipHandle, { sizeFmt: (b: number) => s
       el.style.transform = "translateY(4px)";
     },
   }));
-
-  function move(x: number, y: number): void {
-    const el = root.current;
-    if (!el) return;
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-  }
 
   return (
     <div ref={root} className="db-hover-chip" style={{ opacity: 0, pointerEvents: "none" }} aria-hidden>

@@ -282,14 +282,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.db-current .db-current-meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
 .db-current .db-current-path {
   overflow: hidden;
   font: 10px/1.5 var(--font-mono);

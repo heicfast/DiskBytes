@@ -250,9 +250,11 @@ export function ExploreView({ onPreview }: { onPreview: (id: number) => void }) 
         <div className="db-state db-scanning">
           {/* Premium radial disk sweep (transform-only CSS, 60 fps) */}
           <div className="db-scan-visual" aria-hidden="true">
+            {/* Two guide rings (anchor + texture); a third at r=30 sat
+             * inside the core's pulse-glow radius and shimmered every
+             * 2.4 s cycle — removed rather than crowded. */}
             <span className="db-scan-ring r1" />
             <span className="db-scan-ring r2" />
-            <span className="db-scan-ring r3" />
             <span className="db-scan-sweep" />
             <span className="db-scan-core">
               <HardDriveIcon size={22} />

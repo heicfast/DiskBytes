@@ -245,10 +245,6 @@
   font: 9.5px/1.35 var(--font-mono);
   color: var(--text-tertiary);
 }
-.db-pop-row .db-pop-reason {
-  color: var(--text-tertiary);
-  font-size: 9.5px;
-}
 .db-pop-row b {
   font-size: 11px;
   font-weight: 650;
