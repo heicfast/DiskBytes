@@ -20,6 +20,10 @@ const PROC_CAP: usize = 60;
 /// Shared monitor control state.
 pub struct MonitorState {
     running: AtomicBool,
+    /// Latest `monitor_start` wins: a stale `monitor_stop` (an older
+    /// mount's cleanup racing a newer mount's start — StrictMode remount
+    /// + async IPC) is ignored when the session moved on.
+    session: AtomicU64,
 }
 
 /// Managed state constructor.
@@ -27,19 +31,22 @@ pub struct MonitorState {
 pub fn monitor_state() -> MonitorState {
     MonitorState {
         running: AtomicBool::new(false),
+        session: AtomicU64::new(0),
     }
 }
 
-/// Start the sampler (idempotent: a second call while running is a
-/// no-op — the tab mount effect can fire twice under StrictMode).
+/// Start the sampler. Idempotent while running (the tab mount effect
+/// can fire twice under StrictMode) — every call bumps the session so
+/// the newest mount owns the sampler.
 ///
 /// # Errors
 /// String error when the thread cannot be spawned.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // State extraction is the tauri command contract
-pub fn monitor_start(app: AppHandle, state: tauri::State<'_, MonitorState>) -> Result<(), String> {
+pub fn monitor_start(app: AppHandle, state: tauri::State<'_, MonitorState>) -> Result<u64, String> {
+    let session = state.session.fetch_add(1, Ordering::SeqCst) + 1;
     if state.running.swap(true, Ordering::SeqCst) {
-        return Ok(()); // already running
+        return Ok(session); // already running — latest session wins
     }
     let app = Arc::new(app);
     std::thread::Builder::new()
@@ -51,13 +58,21 @@ pub fn monitor_start(app: AppHandle, state: tauri::State<'_, MonitorState>) -> R
             state.running.store(false, Ordering::SeqCst);
             format!("monitor thread: {e}")
         })?;
-    Ok(())
+    Ok(session)
 }
 
-/// Stop the sampler (the loop exits after the current sleep).
+/// Stop the sampler (the loop exits after the current sleep). Passing
+/// the `session` from `monitor_start` makes the stop a no-op when a
+/// NEWER start already took ownership — an unsequenced stale stop
+/// would otherwise kill a live tab's sampler.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // State extraction is the tauri command contract
-pub fn monitor_stop(state: tauri::State<'_, MonitorState>) {
+pub fn monitor_stop(state: tauri::State<'_, MonitorState>, session: Option<u64>) {
+    if let Some(s) = session {
+        if s != state.session.load(Ordering::SeqCst) {
+            return; // stale stop — a newer mount owns the sampler
+        }
+    }
     state.running.store(false, Ordering::SeqCst);
 }
 

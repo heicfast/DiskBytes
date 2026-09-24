@@ -20,6 +20,7 @@ let scanTicker: number | null = null;
  *  store's reconcile reads it back through get_status). */
 let lastDone: { generation: number; stats: [number, number, number, number] | null; error: string | null } | null = null;
 let monitorTicker: number | null = null;
+let monitorSession = 0;
 const snapshots: { id: string; root: string; takenAt: number; total: number; folders: number; map: Map<string, number> }[] = [];
 let license = { posture: "unlicensed", isPro: false, tier: "", graceDaysLeft: 0, freeCommitCap: 1 * GB };
 let lastScanRoot = 0;
@@ -653,14 +654,24 @@ const commands: Record<string, Cmd> = {
 
   // ── monitor ───────────────────────────────────────────────────────
   monitor_start: () => {
-    if (monitorTicker !== null) return null;
-    monitorTicker = window.setInterval(() => {
+    // Session mirror of the Rust engine: every start bumps the session
+    // (the newest mount owns the sampler); a stop carrying a stale
+    // session is ignored. Without this, the mock's random 4-22 ms IPC
+    // latency can land an unmounted tab's stop AFTER the remount's
+    // start — killing the live sampler (production FIFO masks the same
+    // race, the session guard makes both engines immune).
+    monitorSession += 1;
+    if (monitorTicker === null) {
+      monitorTicker = window.setInterval(() => {
+        emitMockEvent("monitor-sample", monitorSample());
+      }, 2000);
       emitMockEvent("monitor-sample", monitorSample());
-    }, 2000);
-    emitMockEvent("monitor-sample", monitorSample());
-    return null;
+    }
+    return monitorSession;
   },
-  monitor_stop: () => {
+  monitor_stop: (a) => {
+    const s = (a as { session?: number } | undefined)?.session;
+    if (typeof s === "number" && s !== monitorSession) return null; // stale stop
     if (monitorTicker !== null) window.clearInterval(monitorTicker);
     monitorTicker = null;
     return null;

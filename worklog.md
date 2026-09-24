@@ -549,3 +549,30 @@ Stage Summary:
 - 784c8a0 all 3 workflows GREEN with all fixes verified in the production tour
 - 5173b76 (age boundary parity) CI in flight; evidence committed
 - Session totals so far: rounds 18 batch 1+2+3 — mind-map + bubbles engine overhauls, sunburst label system rebuild, legend production fix, focus traps, ~10 engine/canvas bugs fixed at root cause, all with Rust+mock parity and deterministic verification
+
+---
+Task ID: 24
+Agent: main (Super Z)
+Task: Wave 8 (session 5 resume) — Batch 4: keyboard navigation + inspector copy parity + scan-loader legibility + HoverChip placement + dead CSS
+
+Work Log:
+- RESUME: workspace intact; unpushed UUID commit = b4-3 arrow-nav work (useArrowNav hook + List/TopSizes/Folders wiring + flame captures). Rust toolchain had reset with the environment — reinstalled (rustup 1.98.1 + rustfmt/clippy components)
+- b4-3 ARROW NAV verified live: List (↓ moves, → expands Windows 20→27 rows, ← collapses, ↑, Enter drills root→C:), TopSizes (ranks 5→6→7), Folders grid (cols=2: ↓ by row, → by 1, ↑ by -2; Enter drills C:→Program Files)
+- FIX: first-press skip — with nothing selected, any arrow landed on index+delta (a full ROW past item 0 in grids: observed idx 2 at first ↓); now first press selects item 0 (Explorer/Finder grid standard)
+- FIX: context menu keyboard model — role=menu with NO arrow handling (ARIA violation); now ↑/↓ cycle, Home/End jump, Tab dismisses, auto-focus first item on open + visible focus styles (hover-matching bg + accent inset bar)
+- b4-4: overlay isolation verified (context menu open → list selection frozen; preview overlay role=dialog → same; Esc closes); dark-theme selection ring visible
+- b4-7 INSPECTOR: folder/file/drive all verified. FIXES: (1) relativeAge "1 days ago" → singular units (ago() helper + 7 vitest cases); (2) drives read "Disk" + HardDriveIcon — 3 layers fixed: Rust compute_details (path-shaped X:\ check via add_root_path roots), mock nodeDetails (same regex), InspectorPanel (frontend HARDCODED "Folder" for isDir, ignoring backend kind); (3) mock top_sizes parity rewrite: rank field was MISSING (data-rank never rendered → scroll-follow silently dead), in-folder order insertion→children_sorted (on-disk desc, id tie-break), anywhere-scopes re-rank after filter, sizes on-disk (was logical for files), dir kind "N files"; (4) mock Largest Inside now size-sorted
+- App-crate test added: details_drive_root_reads_as_disk (This PC=Folder, C:/D:=Disk, Users=Folder); existing details_fields_complete still passes (alpha is not drive-shaped)
+- b4-8 HOVERCHIP: show() called the LOCAL raw move() (line-scoped) after the async details fetch — undoing the imperative move's offset+clamp; chip jumped to raw pointer/unclamped position when data arrived. Shared placeChip() for both; verified hover at x=1100 → left=1048 (exact clamp bound), orphan-hide on mode swap works
+- b4-9: context menu bottom-right corner: rect [1100,650,1312,813] fits viewport (clamped both axes)
+- b4-11 SCAN LOADER (user's original complaint): pixel audit found rings at #e5e5ea 0.6/0.35 opacity = 1.02:1 on white (INVISIBLE — the sweep orbited empty space; VLM's contrast claim VALID). Fixed: --border token, r1 2px anchor weight. Third ring REMOVED: r=30 track inside the core pulse-glow radius (r≈35), shimmered 49% visibility every 2.4s cycle. Path line: tertiary 10.5px (2.6:1) → secondary 11px (4.9:1 AA). Final angle-coverage: r1 100%, r2 95% (light), 100/100 (dark). VLM misreads triaged: "no Stop button" (crop cut it), "static core" (static frame), "generic loader" (subjective; platter rings + sweep + core verified)
+- VLM center-estimation lesson (again): coral-sweep-bbox center drifts up to 27px from the true visual center — DOM getBoundingClientRect is the only reliable center source; two full measurement rounds were garbage from bad centers
+- b4-12 DEAD CSS: 7 rule blocks removed (folder-grid, file-glyph, cloud-badge, pop-reason, current-meta, dup-summary ×4, protected-flag) — each verified 0 TSX refs including dynamic-construction grep. db-fade-up @keyframes KEPT (6 live animation refs — the flagged .db-fade-up utility was already gone). dead_css 29→22 (rest = template-literal false positives: tone-*, db-folder-card, rank-bar…). Queue popover + folder cards + ranked rows verified visually post-sweep (staged 2 items, rows render, toggle healthy)
+- b4-13: theme crossfade verified — mid-transition frame is a uniform blend (~rgb(88,88,90) at 3 sample zones), no white flash, settles to dark
+- Queue-popover staging note: root guard works (This PC context-menu stage disabled+tooltip); whole-DRIVE staging (C:) is allowed by design (real path)
+
+Stage Summary:
+- Round 18 batch 4 pushed in 2 commits: 37d3c42 (arrow-nav + Disk label + top-sizes parity) ALL 3 CI WORKFLOWS GREEN; 5a2f03c (scan loader + HoverChip + dead CSS) queued
+- Gates at push time: tsc 0, vitest 40/40 (7 new singular-age cases), build OK, cargo core 141/141, clippy clean, fmt clean
+- 6 real bugs fixed this wave (first-press skip, menu keyboard, pluralization ×7 units, missing rank + ordering parity, hardcoded Folder label, HoverChip un-clamp) + 2 legibility upgrades (loader rings, path contrast) + 76 lines of dead CSS removed
+- Next: 5a2f03c CI verify + tour audit, then wipe & spawn Batch 5

@@ -74,7 +74,13 @@ export function MonitorView() {
   useEffect(() => {
     let un: (() => void) | null = null;
     let disposed = false;
-    void (async () => {
+    let session: number | null = null;
+    // The start is async: a fast unmount can run the cleanup BEFORE the
+    // session handle arrives. The stop must be CHAINED after the start —
+    // fired immediately it could land before (or after, unsequenced) our
+    // own start and kill a sampler a newer mount owns.
+    let startSettled: Promise<void> = Promise.resolve();
+    startSettled = (async () => {
       try {
         const unlisten = await listen<Sample>("monitor-sample", (s) => {
           ringRef.current = [...ringRef.current.slice(-(RING - 1)), s];
@@ -85,7 +91,14 @@ export function MonitorView() {
           return;
         }
         un = unlisten;
-        await invoke("monitor_start").catch((e) => setError(String(e)));
+        // The engine returns a session handle: the cleanup's stop is
+        // ignored when a NEWER mount already restarted the sampler
+        // (StrictMode remount + async IPC can reorder stop-before-start).
+        const s = await invoke<number>("monitor_start").catch((e) => {
+          setError(String(e));
+          return null;
+        });
+        session = typeof s === "number" ? s : null;
         setStarted(true);
       } catch (e) {
         setError(String(e));
@@ -94,7 +107,12 @@ export function MonitorView() {
     return () => {
       disposed = true;
       un?.();
-      void invoke("monitor_stop").catch(() => undefined);
+      void startSettled.then(() => {
+        // session null = the start failed → nothing of ours is running.
+        if (session != null) {
+          void invoke("monitor_stop", { session }).catch(() => undefined);
+        }
+      });
     };
   }, []);
 

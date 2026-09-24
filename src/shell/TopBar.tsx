@@ -108,6 +108,12 @@ export function TopBar(props: TopBarProps) {
             data-active={tab === id}
             onClick={() => setTab(id)}
             aria-current={tab === id ? "page" : undefined}
+            /* Below 1500px the visible label span is display:none (icon-only
+             * tab strip) — without an explicit name every tab announces as a
+             * bare "button" to assistive tech. aria-label keeps the name;
+             * title doubles as the icon-only hover tooltip. */
+            aria-label={label}
+            title={label}
           >
             {tab === id && <motion.span layoutId="db-tab-pill" className="db-tab-pill" transition={{ type: "spring", stiffness: 480, damping: 38 }} />}
             <Icon size={15} />

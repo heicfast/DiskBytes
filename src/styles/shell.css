@@ -167,7 +167,13 @@
   opacity: 0.35;
 }
 .db-bcrumb {
-  flex: none;
+  /* Shrink-with-ellipsis (VS Code breadcrumb treatment): the crumb may
+   * compress below its content width and ellipsize its OWN text. The
+   * old `flex: none` let the container's overflow:hidden BLUNT-CLIP
+   * the current crumb mid-glyph at narrow widths (the "pathbar cut in
+   * half" report). */
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
