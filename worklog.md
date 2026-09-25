@@ -601,3 +601,25 @@ Stage Summary:
 - Quick Wins is now the third major mock↔engine parity port (after bubbles + mindmap); the pattern keeps proving out: every fabricated mock surface hides production bugs
 - Gates: tsc 0, vitest 48/48, build OK
 - Next: CI verify (0b7c38f), License dialog flow, Duplicates deep verification, hover-chip edge cases, wave-10 worklog
+
+---
+Task ID: 26
+Agent: main (Super Z)
+Task: Wave 10 (session 6 cont.) — Batch 6: license flows + duplicates deep verify (queue identity bug) + hover chip + focus + search + preview
+
+Work Log:
+- CI FAILURE HANDLED: 0b7c38f failed clippy — the 445d86e monitor session-guard used AtomicU64 without importing it (app crate = Windows-CI-only; invisible locally). 60787f4 hotfix (rustc's own suggestion verbatim); validated by 60787f4 macOS Build + UI Screenshots green, then c9db635 all-3-green
+- b6-1 LICENSE FLOWS: invalid key -> inline error (mock copy verbatim); valid key -> "DiskBytes Pro" activated state + perks + Validate now/Deactivate/Done; topbar pill Free->Pro; **Pro lifts the free-tier commit cap** (129 GB C: drive item: DISABLED with cap tooltip -> ENABLED after activation); Deactivate restores Free
+- b6-2 DUPLICATES DEEP: scan (3.36 GB / 3 groups / 3,821 files), group stage-rest, per-file stage spans, keep tags, rescan. **FOUND THE QUEUE IDENTITY BUG**: stage/stageMany/unstage/remove/contains all keyed on item.id, and every Duplicates row stages with synthetic id 0 — only ONE duplicate could EVER be staged (cross-batch stage silently no-op'd; popover remove(0) nuked ALL dup rows at once). Fixed with keyOf (id!==0 ? id : path) + optional-path remove/unstage/contains + intra-batch dedupe; popover passes remove(i.id, i.path). Live math verified: per-file 0->1, cross-batch 1->2, stage-rest 2->3, remove-one 3->2. 6 new vitest cases (54/54)
+- b6-3 HOVER CHIP: native-pointer hovers at 4 canvas edges — clamped + fits every time (right: r=1408<=1440; bottom-right b=834<=860; left offset; top offset); mode-swap orphan hides (op 0). The b4-8 shared placeChip holds
+- b6-4 FOCUS AUDIT: tab chain = tabs -> breadcrumb -> search -> Cleanup (logical DOM order), rings visible on all buttons; search input's ring lives on the wrapper (:focus-within + 3px ink-soft) — present, my check looked at the wrong element
+- b6-5 SEARCH: Ctrl+K focuses; no-match state "No folders match "zzzznope"." (0 cards); Esc clears + blurs + restores cards
+- b6-6 PREVIEW: drive preview (fallback icon + Open with default app), folder preview (info card), text file preview (1855 chars content rendered); Esc closes all
+- Vite-error-overlay scare during the focus test: transient HMR artifact from the with_dev restart cycle; fresh loads clean, no console errors
+- TOOLING: find-by-name ambiguity documented (nav "Applications" tab vs file-types "Applications" row); CSS-selector nav clicks are the deterministic pattern
+
+Stage Summary:
+- Commits: 60787f4 (AtomicU64 hotfix), c9db635 (queue identity fix) — c9db635 ALL 3 CI WORKFLOWS GREEN (workspace clippy + full test suite + macOS build + tour)
+- Session bug tally so far (sessions 5-6): tab a11y, dark folder-card meta, QuickWins mock engine port + 2 masked production bugs (icons, pluralization), monitor AtomicU64, queue identity — every one live-verified before commit
+- Gates at push: tsc 0, vitest 54/54, build OK, core 141/141, clippy clean, fmt clean
+- Next batch: age-map interactions deep, applications deep (uninstall run/failure paths), toasts sweep, context-menu full matrix, worklog + CI tour audit
