@@ -600,6 +600,13 @@
   background: color-mix(in oklab, var(--tone) 33%, #232326);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
+[data-theme="dark"] .db-folder-meta {
+  /* Base rule colors meta with --on-pastel-secondary (#334155, designed
+   * for LIGHT pastel fills). Dark cards are slate tone-washes (#595e68
+   * class) — that ink is near-invisible on them. The strong override
+   * below existed; the container text ("N items") was missed. */
+  color: var(--text-secondary);
+}
 [data-theme="dark"] .db-folder-meta strong {
   color: var(--text-secondary);
 }
