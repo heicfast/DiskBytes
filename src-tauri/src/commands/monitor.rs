@@ -4,7 +4,7 @@
 //! against the previous raw snapshot via `core::monitor` and emits a
 //! `monitor-sample` event (the UI keeps the 120-sample ring).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
