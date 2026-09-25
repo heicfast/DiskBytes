@@ -6,7 +6,7 @@
  */
 import { emitMockEvent, setMockBackend } from "../lib/ipc";
 import { buildLayout, encodeLayout } from "./layouts";
-import { CATEGORY_COLORS, CATEGORY_LABELS, MockTree, type MockNode } from "./tree";
+import { CATEGORY_COLORS, CATEGORY_LABELS, MockTree } from "./tree";
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -239,6 +239,221 @@ const APPS = [
 
 type Cmd = (args: Record<string, unknown>) => unknown;
 
+// ── Quick Wins engine (port of core quickwins.rs, Windows table) ───
+const CATEGORY_CAP = 400; // core quickwins::CATEGORY_CAP
+const QW_USERPROFILE = "C:\\Users\\dev";
+const QW_LOCALAPPDATA = "C:\\Users\\dev\\AppData\\Local";
+
+interface QwCat {
+  id: string;
+  title: string;
+  icon: string;
+  items: number[];
+  size: number;
+  reviewOnly: boolean;
+  extra: string | null;
+}
+
+export function resolveQuickWins(): QwCat[] {
+  const eqCi = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const findByPath = (p: string): number => {
+    for (let i = 1; i < tree.nodes.length; i++) {
+      if (eqCi(tree.pathOf(i), p)) return i;
+    }
+    return 0; // Rust: unwrap_or(tree.root)
+  };
+  // match_pattern parity: final-segment matches under root; '*' = one segment.
+  const matchPattern = (root: string, segments: string[]): number[] => {
+    let current = [findByPath(root)];
+    for (const seg of segments) {
+      const next: number[] = [];
+      for (const cur of current) {
+        for (const c of tree.nodes[cur].children) {
+          const cn = tree.nodes[c];
+          if (seg === "*" || eqCi(cn.name, seg)) next.push(c);
+        }
+      }
+      current = next;
+      if (current.length === 0) break;
+    }
+    return current.filter((id) => id !== 0);
+  };
+  // find_named parity (any depth, dirs-only option).
+  const findNamed = (name: string, dirsOnly: boolean): number[] => {
+    const out: number[] = [];
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if ((!dirsOnly || n.isDir) && eqCi(n.name, name)) out.push(i);
+    }
+    return out;
+  };
+  const isDescendantOf = (desc: number, anc: number): boolean => {
+    let cur = tree.nodes[desc].parent;
+    while (cur > 0) {
+      if (cur === anc) return true;
+      cur = tree.nodes[cur].parent;
+    }
+    return false;
+  };
+  const nodeSize = (id: number): number => tree.nodes[id].onDisk || 0;
+  // push_cat parity: drop items nested inside a same-category match,
+  // cap at 400, sum on-disk, drop empty categories.
+  const pushCat = (
+    id: string, title: string, icon: string, reviewOnly: boolean,
+    extra: string | null, items: number[],
+  ): QwCat | null => {
+    const filtered: number[] = [];
+    for (const it of items) {
+      if (filtered.some((f) => isDescendantOf(it, f))) continue;
+      filtered.push(it);
+      if (filtered.length >= CATEGORY_CAP) break;
+    }
+    if (filtered.length === 0) return null;
+    return {
+      id, title, icon, items: filtered,
+      size: filtered.reduce((a, x) => a + nodeSize(x), 0),
+      reviewOnly, extra,
+    };
+  };
+
+  const out: QwCat[] = [];
+  // Pattern categories (Windows table, verbatim locations + env roots).
+  const browsers = ["Google\\Chrome", "Microsoft\\Edge", "BraveSoftware\\Brave-Browser"];
+  const cacheSegs = ["Cache", "Code Cache", "GPUCache"];
+  const patternCats: [string, string, string, string, string[]][] = [
+    ["downloads", "Downloads", "download", QW_USERPROFILE, ["Downloads"]],
+    ["temp_caches", "Temp & caches", "temp", QW_LOCALAPPDATA, ["Temp"]],
+    ["temp_caches", "Temp & caches", "temp", QW_LOCALAPPDATA, ["Microsoft", "Windows", "INetCache"]],
+    ["temp_caches", "Temp & caches", "temp", QW_LOCALAPPDATA, ["CrashDumps"]],
+    ["temp_caches", "Temp & caches", "temp", QW_LOCALAPPDATA, ["D3DSCache"]],
+    ["temp_caches", "Temp & caches", "temp", QW_LOCALAPPDATA, ["Microsoft", "Windows", "WER"]],
+    ...browsers.flatMap((b) =>
+      cacheSegs.map((cache) => [
+        "browser_caches", "Browser caches", "browser", QW_LOCALAPPDATA,
+        [...b.split("\\"), "*", cache],
+      ] as [string, string, string, string, string[]]),
+    ),
+    ["browser_caches", "Browser caches", "browser", QW_LOCALAPPDATA, ["Mozilla", "Firefox", "Profiles", "*", "cache2"]],
+    ["dev_caches", "Developer caches", "code", QW_USERPROFILE, [".nuget", "packages"]],
+    ["dev_caches", "Developer caches", "code", QW_USERPROFILE, [".cargo", "registry"]],
+    ["dev_caches", "Developer caches", "code", QW_USERPROFILE, [".gradle", "caches"]],
+    ["dev_caches", "Developer caches", "code", QW_LOCALAPPDATA, ["npm-cache"]],
+    ["dev_caches", "Developer caches", "code", QW_LOCALAPPDATA, ["pip", "Cache"]],
+    ["dev_caches", "Developer caches", "code", QW_LOCALAPPDATA, ["pnpm", "store"]],
+    ["dev_caches", "Developer caches", "code", QW_LOCALAPPDATA, ["Yarn", "Cache"]],
+    ["android_emulators", "Android emulators", "phone", QW_USERPROFILE, [".android", "avd"]],
+  ];
+  const buckets = new Map<string, number[]>();
+  for (const [cat, , , root, segs] of patternCats) {
+    for (const id of matchPattern(root, segs)) {
+      const b = buckets.get(cat);
+      if (b) b.push(id);
+      else buckets.set(cat, [id]);
+    }
+  }
+  const catMeta: [string, string, string][] = [
+    ["downloads", "Downloads", "download"],
+    ["temp_caches", "Temp & caches", "temp"],
+    ["browser_caches", "Browser caches", "browser"],
+    ["dev_caches", "Developer caches", "code"],
+    ["android_emulators", "Android emulators", "phone"],
+  ];
+  for (const [id, title, icon] of catMeta) {
+    const items = buckets.get(id);
+    if (items) {
+      const cat = pushCat(id, title, icon, false, null, items);
+      if (cat) out.push(cat);
+    }
+  }
+
+  // node_modules: any depth, dirs named node_modules.
+  {
+    const cat = pushCat("node_modules", "node_modules", "code", false, null, findNamed("node_modules", true));
+    if (cat) out.push(cat);
+  }
+  // Build artifacts: unconditional names + sibling-ruled target/bin/obj.
+  {
+    const BUILD_ARTIFACT_NAMES = [
+      "build", ".build", "dist", ".next", ".nuxt", ".turbo", ".parcel-cache",
+      ".terraform", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+      ".tox", ".gradle",
+    ];
+    const ba: number[] = [];
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if (!n.isDir) continue;
+      if (BUILD_ARTIFACT_NAMES.some((f) => eqCi(n.name, f))) { ba.push(i); continue; }
+      if (n.parent <= 0) continue;
+      const siblings = tree.nodes[n.parent].children.map((c) => tree.nodes[c].name);
+      if (eqCi(n.name, "target")) {
+        if (siblings.some((s) => s === "Cargo.toml" || s === "pom.xml")) ba.push(i);
+      } else if (eqCi(n.name, "bin") || eqCi(n.name, "obj")) {
+        if (siblings.some((s) => s === "project.json" || /\.(csproj|vcxproj)$/i.test(s))) ba.push(i);
+      }
+    }
+    const cat = pushCat("build_artifacts", "Build artifacts", "hammer", false, null, ba);
+    if (cat) out.push(cat);
+  }
+  // Large media: video/audio/image files >= 10 MB (cats 0/1/2).
+  {
+    const lm: number[] = [];
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if (!n.isDir && n.logical >= 10 * MB && (n.category === 0 || n.category === 1 || n.category === 2)) lm.push(i);
+    }
+    const cat = pushCat("large_media", "Large media", "video", false, null, lm);
+    if (cat) out.push(cat);
+  }
+  // VM disks (review-only): VM_DISK_ROOTS + any .vhdx >= 1 GB.
+  {
+    const vmRoots: [string, string[]][] = [
+      [QW_LOCALAPPDATA, ["Packages", "*", "LocalState"]],
+      [QW_LOCALAPPDATA, ["Docker"]],
+      [QW_USERPROFILE, ["VirtualBox VMs"]],
+    ];
+    const vm: number[] = [];
+    for (const [root, segs] of vmRoots) vm.push(...matchPattern(root, segs));
+    for (let i = 1; i < tree.nodes.length; i++) {
+      const n = tree.nodes[i];
+      if (!n.isDir && n.logical >= GB && /\.vhdx$/i.test(n.name)) vm.push(i);
+    }
+    const cat = pushCat("vm_disks", "VM disks", "server", true, null, vm);
+    if (cat) out.push(cat);
+  }
+  // Previous Windows install (review-only + storagesense link).
+  {
+    const cat = pushCat("windows_old", "Previous Windows install", "clock", true, "ms-settings:storagesense", findNamed("Windows.old", true));
+    if (cat) out.push(cat);
+  }
+  out.sort((a, b) => b.size - a.size);
+  return out;
+}
+
+/** Items for one category (the quick_win_items command body, exported
+ *  for the parity tests). Mirrors the Rust command: re-resolve, cap,
+ *  {id, path, size: on_disk}. */
+export function quickWinItems(categoryId: string): { id: number; path: string; size: number }[] {
+  const cat = resolveQuickWins().find((c) => c.id === categoryId);
+  if (!cat) return [];
+  return cat.items
+    .slice(0, CATEGORY_CAP)
+    .map((id) => ({ id, path: fmtPath(id), size: tree.nodes[id].onDisk || 0 }));
+}
+
+/** Row shape for the UI (items stripped — ids are engine-internal). */
+export function stripItems(c: QwCat): Record<string, unknown> {
+  return {
+    id: c.id,
+    title: c.title,
+    icon: c.icon,
+    count: c.items.length,
+    size: c.size,
+    reviewOnly: c.reviewOnly,
+    extra: c.extra,
+    biggestMatch: c.items[0],
+  };
+}
+
 const commands: Record<string, Cmd> = {
   // ── scan lifecycle ────────────────────────────────────────────────
   get_dev_hooks: () => ({
@@ -315,70 +530,8 @@ const commands: Record<string, Cmd> = {
   },
 
   // ── sidebar data ──────────────────────────────────────────────────
-  quick_wins: () => {
-    const find = (pred: (n: MockNode) => boolean): { node: number; v: number } | null => {
-      let best: { node: number; v: number } | null = null;
-      for (let i = 1; i < tree.nodes.length; i++) {
-        const n = tree.nodes[i];
-        if (n.isDir && pred(n)) {
-          const v = n.onDisk || n.logical;
-          if (!best || v > best.v) best = { node: i, v };
-        }
-      }
-      return best;
-    };
-    const rows: Record<string, unknown>[] = [
-      { id: "downloads", title: "Downloads", icon: "archive", count: 33, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
-      { id: "caches", title: "Temp & caches", icon: "refresh", count: 83, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
-      { id: "large-media", title: "Large media", icon: "image", count: 12, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
-      { id: "node-modules", title: "node_modules", icon: "box", count: 208, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
-      { id: "build-artifacts", title: "Build artifacts", icon: "package", count: 95, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
-      { id: "dev-caches", title: "Developer caches", icon: "code", count: 92, size: 0, reviewOnly: false, extra: null, biggestMatch: null },
-      { id: "vm-disks", title: "VM disks", icon: "app", count: 2, size: 30.4 * GB, reviewOnly: true, extra: "Deleting a VM disk destroys its data", biggestMatch: null },
-    ];
-    // attach sizes from the tree where possible
-    const nm = find((n) => n.name === "node_modules");
-    if (nm) rows[3].size = nm.v, rows[3].biggestMatch = nm.node;
-    const temp = find((n) => n.name === "Temp");
-    if (temp) rows[1].size = Math.round(temp.v * 1.8), rows[1].biggestMatch = temp.node;
-    const target = find((n) => n.name === "target");
-    if (target) rows[4].size = target.v, rows[4].biggestMatch = target.node;
-    const reg = find((n) => n.name === "registry");
-    if (reg) rows[5].size = Math.round(reg.v * 1.4), rows[5].biggestMatch = reg.node;
-    rows[0].size = 0; // downloads sum below
-    let dl = 0;
-    for (let i = 1; i < tree.nodes.length; i++) {
-      const n = tree.nodes[i];
-      if (!n.isDir && n.parent > 0 && tree.nodes[n.parent].name === "Downloads") dl += n.logical;
-    }
-    rows[0].size = dl;
-    let media = 0;
-    let mc = 0;
-    for (let i = 1; i < tree.nodes.length; i++) {
-      const n = tree.nodes[i];
-      if (!n.isDir && (n.category === 0 || n.category === 1 || n.category === 2) && n.logical >= 10 * MB) {
-        media += n.logical;
-        mc++;
-      }
-    }
-    rows[2].size = media;
-    rows[2].count = mc;
-    return rows;
-  },
-  quick_win_items: (a) => {
-    const id = String(a.id);
-    const out: { id: number; path: string; size: number; reason: string }[] = [];
-    const match: Record<string, (n: MockNode) => boolean> = {
-      "node-modules": (n) => n.name === "node_modules",
-      "vm-disks": (n) => !n.isDir && (n.name.endsWith(".vdi") || n.name.endsWith(".vmdk")),
-    };
-    const pred = match[id] ?? (() => false);
-    for (let i = 1; i < tree.nodes.length && out.length < 400; i++) {
-      const n = tree.nodes[i];
-      if (pred(n)) out.push({ id: i, path: fmtPath(i), size: n.onDisk || n.logical, reason: "Quick win" });
-    }
-    return out;
-  },
+  quick_wins: () => resolveQuickWins().map(stripItems),
+  quick_win_items: (a) => quickWinItems(String(a.categoryId)),
   file_types: () => {
     const sizes = new Array(9).fill(0);
     for (let i = 1; i < tree.nodes.length; i++) {

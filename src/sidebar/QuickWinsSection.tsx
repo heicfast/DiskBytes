@@ -8,8 +8,9 @@
 import { useEffect, useState } from "react";
 import {
   ArchiveIcon, AppWindowIcon, BoxIcon, BubblesIcon, CheckIcon, ChevronRightIcon,
-  ExternalLinkIcon, FileImageIcon, FileCode2Icon, PackageOpenIcon, RefreshCwIcon,
-  type AnyIcon,
+  Clock3Icon, DownloadIcon, ExternalLinkIcon, FileImageIcon, FileCode2Icon,
+  FileVideoIcon, FlameIcon, GlobeIcon, HammerIcon, HardDriveIcon, PackageOpenIcon,
+  RefreshCwIcon, SmartphoneIcon, type AnyIcon,
 } from "../components/Icon";
 import { SectionCaption } from "../components/buttons";
 import { invoke } from "../lib/ipc";
@@ -46,6 +47,18 @@ const ICONS: Record<string, AnyIcon> = {
   code: FileCode2Icon,
   app: AppWindowIcon,
   blocks: BubblesIcon,
+  // Production engine icon tags (core quickwins.rs). Every one of these
+  // was missing from this map — production rendered the generic BoxIcon
+  // fallback for 8 of 10 categories because the mock used a different
+  // vocabulary and the gap never surfaced in dev.
+  download: DownloadIcon,
+  temp: FlameIcon,
+  browser: GlobeIcon,
+  phone: SmartphoneIcon,
+  hammer: HammerIcon,
+  video: FileVideoIcon,
+  server: HardDriveIcon,
+  clock: Clock3Icon,
 };
 
 const TONES = ["violet", "rose", "green", "amber", "blue", "sky", "violet", "slate"];
@@ -146,7 +159,8 @@ export function QuickWinsSection() {
               <span>
                 <strong>{row.title}</strong>
                 <small>
-                  {row.count.toLocaleString()} items{row.reviewOnly ? " · review only" : ""}
+                  {row.count.toLocaleString()} {row.count === 1 ? "item" : "items"}
+                  {row.reviewOnly ? " · review only" : ""}
                 </small>
               </span>
               <b className="tnum">{bytes(row.size)}</b>
