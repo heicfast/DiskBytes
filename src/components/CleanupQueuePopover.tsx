@@ -219,7 +219,7 @@ export function CleanupQueuePopover({
                     type="button"
                     className="db-pop-remove"
                     aria-label={`Remove ${i.path}`}
-                    onClick={() => remove(i.id)}
+                    onClick={() => remove(i.id, i.path)}
                   >
                     <XIcon size={13} />
                   </button>

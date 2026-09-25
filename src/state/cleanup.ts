@@ -38,10 +38,10 @@ interface CleanupState {
   items: QueueItem[];
   stage: (item: QueueItem) => void;
   stageMany: (items: QueueItem[]) => void;
-  unstage: (id: number) => void;
-  remove: (id: number) => void;
+  unstage: (id: number, path?: string) => void;
+  remove: (id: number, path?: string) => void;
   clear: () => void;
-  contains: (id: number) => boolean;
+  contains: (id: number, path?: string) => boolean;
   totalSize: () => number;
   /** Commit to the Recycle Bin after explicit confirmation (M5).
    *  Rejects on stale generation / COM failure — the queue stays intact
@@ -49,13 +49,21 @@ interface CleanupState {
   commitToRecycleBin: () => Promise<CommitResult>;
 }
 
+/** Stable identity: real node ids dedupe by id, but synthetic items
+ * (Duplicates stage with id 0 — path-only; the Rust commit path treats
+ * id 0 as path-only) must dedupe by PATH. Keying everything by id alone
+ * meant only ONE duplicate could ever be staged, and remove(0) nuked
+ * every duplicate row at once. */
+const keyOf = (i: Pick<QueueItem, "id" | "path">): string =>
+  i.id === 0 ? `p:${i.path}` : `i:${i.id}`;
+
 /** The staged queue. Popover + badge subscribe via selectors (spec §9). */
 export const useCleanupStore = create<CleanupState>((set, get) => ({
   items: [],
 
   stage: (item) =>
     set((s) => {
-      if (s.items.some((i) => i.id === item.id)) return s; // idempotent
+      if (s.items.some((i) => keyOf(i) === keyOf(item))) return s; // idempotent
       return { items: [...s.items, item] };
     }),
 
@@ -69,19 +77,35 @@ export const useCleanupStore = create<CleanupState>((set, get) => ({
       });
     }
     set((s) => {
-      const seen = new Set(s.items.map((i) => i.id));
-      const add = items.filter((i) => !seen.has(i.id));
+      // Dedupe against the queue AND within the batch (same keyOf).
+      const seen = new Set(s.items.map((i) => keyOf(i)));
+      const add = items.filter((i) => {
+        const k = keyOf(i);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
       return add.length ? { items: [...s.items, ...add] } : s;
     });
   },
 
-  unstage: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+  /** Remove by id — with a path, removes exactly one synthetic item
+   * (Duplicates id=0 rows); without, removes every item with that id
+   * (real node ids are unique in the queue). */
+  unstage: (id, path) =>
+    set((s) => ({
+      items: s.items.filter((i) => (path === undefined ? i.id !== id : !(i.id === id && i.path === path))),
+    })),
 
-  remove: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+  remove: (id, path) =>
+    set((s) => ({
+      items: s.items.filter((i) => (path === undefined ? i.id !== id : !(i.id === id && i.path === path))),
+    })),
 
   clear: () => set({ items: [] }),
 
-  contains: (id) => get().items.some((i) => i.id === id),
+  contains: (id, path) =>
+    get().items.some((i) => (path === undefined ? i.id === id : i.id === id && i.path === path)),
 
   totalSize: () => get().items.reduce((acc, i) => acc + i.size, 0),
 

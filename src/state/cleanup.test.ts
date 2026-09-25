@@ -49,4 +49,51 @@ describe("useCleanupStore (spec §9)", () => {
     useCleanupStore.getState().stageMany([item(1, 500), item(2, 700)]);
     expect(useCleanupStore.getState().totalSize()).toBe(1200);
   });
+
+  // ── Duplicates staging (synthetic id 0 = path-only items) ──────────
+  // THE BUG: dedupe keyed by id alone meant only ONE duplicate could
+  // ever be staged (every Duplicates row stages with id 0), and
+  // remove(0) removed them all at once.
+  const dupe = (path: string, size = 50): QueueItem => ({ id: 0, path, size, reason: "Duplicate" });
+
+  it("stages multiple synthetic id-0 items with different paths", () => {
+    const s = useCleanupStore.getState();
+    s.stageMany([dupe("C:\\a\\1.txt"), dupe("C:\\a\\2.txt"), dupe("C:\\a\\3.txt")]);
+    expect(useCleanupStore.getState().items).toHaveLength(3);
+  });
+
+  it("stageMany across batches stages NEW paths under id 0", () => {
+    const s = useCleanupStore.getState();
+    s.stageMany([dupe("C:\\a\\1.txt")]);
+    s.stageMany([dupe("C:\\a\\2.txt")]);
+    expect(useCleanupStore.getState().items).toHaveLength(2);
+  });
+
+  it("the same duplicate path is idempotent across batches", () => {
+    const s = useCleanupStore.getState();
+    s.stageMany([dupe("C:\\a\\1.txt")]);
+    s.stageMany([dupe("C:\\a\\1.txt")]);
+    expect(useCleanupStore.getState().items).toHaveLength(1);
+  });
+
+  it("stageMany dedupes within one batch too", () => {
+    const s = useCleanupStore.getState();
+    s.stageMany([dupe("C:\\a\\1.txt"), dupe("C:\\a\\1.txt"), dupe("C:\\a\\2.txt")]);
+    expect(useCleanupStore.getState().items).toHaveLength(2);
+  });
+
+  it("remove(id, path) removes exactly one synthetic row", () => {
+    const s = useCleanupStore.getState();
+    s.stageMany([dupe("C:\\a\\1.txt"), dupe("C:\\a\\2.txt"), dupe("C:\\a\\3.txt")]);
+    s.remove(0, "C:\\a\\2.txt");
+    const left = useCleanupStore.getState().items.map((i) => i.path);
+    expect(left).toEqual(["C:\\a\\1.txt", "C:\\a\\3.txt"]);
+  });
+
+  it("real ids still remove by id alone", () => {
+    const s = useCleanupStore.getState();
+    s.stageMany([item(7), dupe("C:\\a\\1.txt")]);
+    s.remove(7);
+    expect(useCleanupStore.getState().items.map((i) => i.id)).toEqual([0]);
+  });
 });
