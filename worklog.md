@@ -623,3 +623,23 @@ Stage Summary:
 - Session bug tally so far (sessions 5-6): tab a11y, dark folder-card meta, QuickWins mock engine port + 2 masked production bugs (icons, pluralization), monitor AtomicU64, queue identity — every one live-verified before commit
 - Gates at push: tsc 0, vitest 54/54, build OK, core 141/141, clippy clean, fmt clean
 - Next batch: age-map interactions deep, applications deep (uninstall run/failure paths), toasts sweep, context-menu full matrix, worklog + CI tour audit
+
+---
+Task ID: 27
+Agent: main (Super Z)
+Task: Wave 11 (session 6 cont.) — Batch 7: age-map deep (frozen subscriptions) + applications deep (uninstall shape) + toasts + context matrix + monitor
+
+Work Log:
+- b7-1 AGE MAP DEEP: **FOUND THE FROZEN-SUBSCRIPTION BUG (2 components)**: AgeMapMode + InspectorPanel subscribed to useCleanupStore((s) => s.contains) — a STABLE fn reference that never changes identity, so neither re-rendered on queue changes. The +/✓ toggle stayed '+' after staging (follow-up click re-staged instead of unstaging); the Inspector's Add button never flipped to Staged/unstage. Both refreshed only on unrelated re-renders (selecting another node) — invisible to single-interaction tests. Fixed: subscribe to s.items (the pattern TopBar/FoldersMode/Popover already used); AgeMap builds stagedIds Set per render. Verified live: toggle flips to 'Unstage install-975.dat' + staged class, unstage decrements badge; inspector flips to 'Staged for Cleanup'
+- MONTH TOOLTIP FIX: heat-cell titles used the single-letter axis labels — 'S 2026 — 35.4 GB' (J = Jan/Jun/Jul, M = Mar/May, A = Apr/Aug ambiguous). Tooltips now use full names ('September 2026 — 35.4 GB'); grid labels stay single-letter
+- b7-2 APPLICATIONS DEEP: breakdown expands (STORE PACKAGE / Program files rows), uninstall confirm copy verified ('Uninstall Spotify? | 780 MB program files · 1.60 GB leftovers. Running the app's own uninstaller keeps the registry...'). **FOUND THE UNINSTALL MOCK-SHAPE BUG**: frontend expects the production UninstallResult (closedProcesses/exitCode/remainingLeftovers/removedEntry); mock returned {ok, leftovers} — runUninstall threw on undefined.flatMap and surfaced a TypeError banner in dev. Fixed: exact production shape + the app is REMOVED from APPS (registry-gone parity); unknown id -> exitCode 1605/removedEntry false. Verified live: uninstall Spotify -> dialog closes, 4->3 apps, no failure banner
+- b7-3 TOASTS: db-toast event bus — show, replace (latest wins), auto-hide at 5.2s; success variant verified earlier ('Moved 1 item · 36.4 MB to the Recycle Bin — empty it to free the space.'); shield variant wired to admin-restart-failed
+- b7-4 CONTEXT-MENU MATRIX: canvas (treemap) menu = Open/Preview/Show in Explorer/Copy Path/Add to Cleanup all enabled on folder cells; Add to Cleanup stages (badge 1); Open drills (crumb chain …AppData/Local/Temp with ellipsis). Prior waves covered: folder cards (both themes), QuickWins (Add all + Show in Explorer + review-only disabled), TopSizes + List (Preview), Age Map big rows
+- b7-5 MONITOR DEEP: CPU ticks live at the 2s cadence (26% -> 17% across 4.5s — the b5-9 session-guard holds across remounts), process filter input + segmented CPU/Memory sort toggle functional, volume rows render
+- Resource-pressure notes: EAGAIN spawns twice this wave — full pkill (vite+chrome+agent-browser) between batches is now part of the loop
+
+Stage Summary:
+- Commits: dbd1b6b (frozen subscriptions + month tooltips), 4ef46d4 (uninstall mock shape) — 4ef46d4 CI in flight; dbd1b6b cancelled by the newer push (standard concurrency)
+- Three more real bugs fixed this wave, all in the interactive layer that static review misses: frozen Zustand subscriptions (x2 components), wrong mock IPC shape, ambiguous tooltips
+- Session totals (sessions 5-6): 9 real bugs fixed + QuickWins engine port + theme/responsive/queue/license/duplicates/applications/toasts/context-matrix verification sweeps
+- Next batch: CI tour audit, remaining polish (empty-state copy sweep, abbreviation toggle, drag-region behaviors), wave-12 worklog
