@@ -801,8 +801,19 @@ const commands: Record<string, Cmd> = {
   // ── applications ──────────────────────────────────────────────────
   list_applications: () => APPS,
   uninstall_app: (a) => {
+    // Production shape (commands/applications.rs UninstallResult):
+    // closedProcesses / exitCode / remainingLeftovers / removedEntry.
+    // The old mock returned {ok, leftovers} — a WRONG shape that made
+    // runUninstall throw on remainingLeftovers.flatMap(undefined) and
+    // surface a TypeError banner instead of the success flow.
     console.info("[mock] uninstall_app", a);
-    return { ok: true, leftovers: [] };
+    const id = String(a.id);
+    const idx = APPS.findIndex((x) => x.id === id);
+    if (idx === -1) {
+      return { closedProcesses: [], exitCode: 1605, remainingLeftovers: [], removedEntry: false };
+    }
+    APPS.splice(idx, 1);
+    return { closedProcesses: [], exitCode: 0, remainingLeftovers: [], removedEntry: true };
   },
 
   // ── monitor ───────────────────────────────────────────────────────
