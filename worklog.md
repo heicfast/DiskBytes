@@ -576,3 +576,28 @@ Stage Summary:
 - Gates at push time: tsc 0, vitest 40/40 (7 new singular-age cases), build OK, cargo core 141/141, clippy clean, fmt clean
 - 6 real bugs fixed this wave (first-press skip, menu keyboard, pluralization ×7 units, missing rank + ordering parity, hardcoded Folder label, HoverChip un-clamp) + 2 legibility upgrades (loader rings, path contrast) + 76 lines of dead CSS removed
 - Next: 5a2f03c CI verify + tour audit, then wipe & spawn Batch 5
+
+---
+Task ID: 25
+Agent: main (Super Z)
+Task: Wave 9 (session 6 resume) — Batch 5: snapshots E2E + theme sweeps + responsive + Quick Wins engine port (the biggest find)
+
+Work Log:
+- RESUME: workspace intact; UUID commit 3d40085 = b5 pathbar+monitor work; squashed into 445d86e and pushed; 5a2f03c CI all 3 workflows GREEN
+- SANDBOX DISCOVERY: processes spawned in a tool call are reaped when the call ends — vite must live INSIDE each test invocation. scripts/with_dev.sh (vite up → run command → teardown). Vite restarts trigger full page reload = app state resets: every test = open fresh + rescan (~11s) in ONE call
+- b5-10 SNAPSHOTS E2E: take x2, list (root/size/date/folders), Before/After auto-diff, "0 changed folders" empty state, two-step delete (arm→confirm, aria-label switches) — ALL PASS
+- A11Y BUG FIXED (found during b5-10): below 1500px the tab strip is icon-only and every nav button announced as a nameless "button" (label span display:none excluded from accname). aria-label + title added to all 5 tabs
+- b5-11/12 THEME SWEEPS: 18 captures (2 themes x 9 surfaces: explore/ctxmenu/queue/dupes/apps/monitor/snapshots/license/filtered), every VLM claim pixel-triaged. ONE real bug: dark folder-card meta "N items" rendered #334155 (ink for LIGHT pastels) on dark slate tone-washes — near-invisible; dark override existed for strong only. Fixed → --text-secondary, verified 5:1 + VLM re-grade
+- VLM triage wins this wave: "Free pill clipped at top" x5 (sidebar label at y=366 fully rendered; crop artifacts + scale misreads), "sparkline clipped" (y∈[4,h-2] in-bounds math), "input/toggle height mismatch" (both 34px containers), "queue modal not centered" (anchored popover by design), "Activate button weak" (disabled-state opacity: empty key), "savings label truncated" (queue popover overlap by design), breadcrumb alignment (centerDelta=0)
+- TOOLING LESSON: agent-browser find-by-name matches MULTIPLE elements (nav "Applications" tab vs file-types "Applications 821 MB" sidebar row at y=1170) and can click the wrong one silently; CSS-selector clicks are deterministic. Also: synthetic MouseEvent contextmenu does NOT trigger React onContextMenu — use `agent-browser mouse down/up right` (CDP trusted events)
+- b5-13 RESPONSIVE: 6-level breadcrumb chain (This PC>C:>Users>dev>Documents>Work) with ellipsis crumb active — no clip, no hscroll at 1440/1280/1024; all canvas modes render at 1024 (402px canvas, compact but painted); minWidth=1280 is the design floor
+- QUICK WINS ENGINE PORT (the big find): mock quick_wins FABRICATED rows (hard-coded counts "33 items", kebab ids) and quick_win_items matched ONLY node_modules+vm-disks — "Add all N" staged NOTHING for the other 5 categories (badge stayed 0, caught live). Faithful port of core quickwins.rs: Windows pattern table verbatim (env-rooted segments, '*' wildcards), snake_case ids, review-only flags, nested same-category dedup, 400 cap, on-disk sums, size-desc sort, empty-drop. Sidebar now reads "Large media 292 items 41.1 GB / VM disks 1 item · review only / Downloads 1 item 20.6 GB / Temp & caches 2 items / Android emulators 1 item / Developer caches 2 items / node_modules 2 items / Build artifacts 2 items"
+- TWO PRODUCTION BUGS the fake mock masked (both fixed): (1) frontend ICONS map lacked 8 of 10 production icon tags (download/temp/browser/phone/hammer/video/server/clock) — production rendered BoxIcon fallback for nearly every row; (2) "{count} items" never pluralized — production downloads row = count 1 renders "1 items"
+- 8 new vitest parity tests (48/48): snake ids, count==items.len, every-category-stageable (the original bug), sort, review-only, icon tags, path-prefix parent/descendant exclusion
+- b5-14/15 QUEUE LIFECYCLE (all live): 5 staging sources verified (QuickWins add-all 292→293 exact; Inspector 0→1; AgeMap stage-top →25; Duplicates stage-rest →3; Applications uninstall-dialog leftovers →1); ✕ remove 2→1; Clear →0; free-tier cap (129GB item blocked with tooltip, 36.4MB item passes); confirm dialog "Move 1 item to the Recycle Bin?" (singular); commit → badge 0 + toast "Moved 1 item · 36.4 MB..." + popover auto-close
+
+Stage Summary:
+- Commits this wave: 445d86e (batch 5: monitor race + pathbar + tab a11y + snapshots verify), 13bc3d7 (dark folder-card meta), 0b7c38f (Quick Wins engine port + icons + pluralization) — all pushed
+- Quick Wins is now the third major mock↔engine parity port (after bubbles + mindmap); the pattern keeps proving out: every fabricated mock surface hides production bugs
+- Gates: tsc 0, vitest 48/48, build OK
+- Next: CI verify (0b7c38f), License dialog flow, Duplicates deep verification, hover-chip edge cases, wave-10 worklog
