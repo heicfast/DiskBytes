@@ -37,7 +37,11 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
   const currentFolder = useExploreStore((s) => s.currentFolder);
   const selectedNode = useExploreStore((s) => s.selectedNode);
   const openFolder = useExploreStore((s) => s.openFolder);
-  const contains = useCleanupStore((s) => s.contains);
+  // Subscribe to the ITEMS (not the stable contains fn — that selector
+  // never changes identity, so the staged state would freeze and only
+  // refresh on unrelated re-renders; the Add button couldn't flip to
+  // Staged/unstage after staging).
+  const queueItems = useCleanupStore((s) => s.items);
   const stage = useCleanupStore((s) => s.stage);
   const unstage = useCleanupStore((s) => s.unstage);
   const [details, setDetails] = useState<NodeDetailsData | null>(null);
@@ -111,7 +115,7 @@ export function InspectorPanel({ onPreview }: { onPreview: (id: number) => void 
     : details.isDir
       ? FolderIcon
       : categoryIcon(details.kind);
-  const staged = contains(details.id);
+  const staged = queueItems.some((i) => i.id === details.id);
   const kindColor = `#${details.kindColor.toString(16).padStart(6, "0")}`;
   // The synthetic This-PC root (multi-drive scan): node_path yields the
   // LABEL "This PC", not a real path. Staging it would hand the shell a

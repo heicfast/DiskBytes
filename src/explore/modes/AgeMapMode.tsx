@@ -15,6 +15,10 @@ import { Spinner } from "../../components/buttons";
 
 const AGE_CSS = ["var(--age-0)", "var(--age-1)", "var(--age-2)", "var(--age-3)", "var(--age-4)", "var(--age-5)"];
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+/** Full names for TOOLTIPS — the single-letter axis labels fit the grid,
+ *  but "S 2026 — 35.4 GB" is ambiguous (J = Jan/Jun/Jul, M = Mar/May,
+ *  A = Apr/Aug); tooltips have no space constraint. */
+const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export interface AgeMapModeProps {
   generation: number;
@@ -26,8 +30,12 @@ export interface AgeMapModeProps {
 
 export function AgeMapMode(props: AgeMapModeProps) {
   const [data, setData] = useState<AgeMapDataData | null>(null);
+  // Items (not the stable contains fn) — the +/✓ toggle state must
+  // re-render the moment the queue changes (selecting the function
+  // freezes the state; it only refreshed on unrelated re-renders).
+  const queueItems = useCleanupStore((s) => s.items);
+  const stagedIds = new Set(queueItems.map((i) => i.id));
   const stage = useCleanupStore((s) => s.stage);
-  const contains = useCleanupStore((s) => s.contains);
   const unstage = useCleanupStore((s) => s.unstage);
 
   useEffect(() => {
@@ -129,7 +137,7 @@ export function AgeMapMode(props: AgeMapModeProps) {
                   key={mi}
                   className={`${isBusiest ? "busiest" : ""} ${labeled ? "labeled" : ""}`}
                   style={{ ["--heat" as string]: Math.max(0.08, frac).toFixed(2) }}
-                  title={`${MONTHS[mi]} ${y} — ${bytes(v)}`}
+                  title={`${MONTHS_FULL[mi]} ${y} — ${bytes(v)}`}
                 >
                   {labeled && <b className="tnum">{bytes(v)}</b>}
                 </i>
@@ -163,7 +171,7 @@ export function AgeMapMode(props: AgeMapModeProps) {
           <div className="db-substate">No files ≥ 40 MB untouched for over a year. Nothing to reclaim here.</div>
         ) : (
           data.big.slice(0, 50).map((row) => {
-            const staged = contains(row.id);
+            const staged = stagedIds.has(row.id);
             return (
               <div
                 className="db-big-row"
